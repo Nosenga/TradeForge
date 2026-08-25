@@ -7,12 +7,30 @@ from database import get_market_data, insert_market_data
 load_dotenv()
 
 def format_symbol_for_api(symbol):
-    # Format symbol for API compatibility
-    symbol = symbol.upper()
-
-    if len(symbol) == 6 and symbol.startswith(('EUR', 'USD', 'GBP', 'JPY', 'AUD', 'CAD', 'CHF', 'NZD')):
-        # If it's a forex pair like EURUSD, format as EUR/USD
-        symbol = f"{symbol[:3]}/{symbol[3:]}"
+    """
+    Convert symbol to Twelve Data format.
+    
+    Examples:
+    EURUSD → EUR/USD
+    BTCUSD → BTC/USD
+    ETHUSD → ETH/USD
+    AAPL → AAPL (stocks stay the same)
+    """
+    # If symbol already has a slash, return as-is
+    if '/' in symbol:
+        return symbol
+    
+    # Crypto pairs (3 letters + USD)
+    crypto_pairs = ['BTC', 'ETH', 'XRP', 'LTC', 'ADA', 'DOT', 'LINK', 'BNB', 'SOL', 'DOGE']
+    if symbol[:3] in crypto_pairs and symbol[3:] == 'USD':
+        return f"{symbol[:3]}/{symbol[3:]}"
+    
+    # Forex pairs (6 characters, e.g., EURUSD)
+    forex_pairs = ['EUR', 'GBP', 'USD', 'AUD', 'NZD', 'JPY', 'CHF', 'CAD']
+    if len(symbol) == 6 and symbol[:3] in forex_pairs:
+        return f"{symbol[:3]}/{symbol[3:]}"
+    
+    # Return as-is for stocks/indices
     return symbol
 
 API_KEY = os.getenv("TWELVE_DATA_API_KEY")

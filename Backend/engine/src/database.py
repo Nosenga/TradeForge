@@ -165,6 +165,123 @@ def get_latest_price(symbol):
         cursor.close()
         connection.close()
 
+def create_users_table():
+    """Create users table if it doesn't exist."""
+    conn = get_database_connection()
+    if conn is None:
+        print("❌ Failed to connect to database")
+        return
+    
+    cur = conn.cursor()
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            id SERIAL PRIMARY KEY,
+            username VARCHAR(50) UNIQUE NOT NULL,
+            email VARCHAR(100) UNIQUE NOT NULL,
+            password_hash VARCHAR(255) NOT NULL,
+            full_name VARCHAR(100),
+            is_active BOOLEAN DEFAULT TRUE,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    
+    conn.commit()
+    cur.close()
+    conn.close()
+    print("✅ Users table created successfully")
+
+
+def get_user_by_username(username):
+    """Get user by username."""
+    conn = get_database_connection()
+    if conn is None:
+        return None
+    
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT id, username, email, password_hash, full_name, is_active
+        FROM users
+        WHERE username = %s
+    """, (username,))
+    
+    row = cur.fetchone()
+    cur.close()
+    conn.close()
+    
+    if row:
+        return {
+            'id': row[0],
+            'username': row[1],
+            'email': row[2],
+            'password_hash': row[3],
+            'full_name': row[4],
+            'is_active': row[5]
+        }
+    return None
+
+
+def get_user_by_email(email):
+    """Get user by email."""
+    conn = get_database_connection()
+    if conn is None:
+        return None
+    
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT id, username, email, password_hash, full_name, is_active
+        FROM users
+        WHERE email = %s
+    """, (email,))
+    
+    row = cur.fetchone()
+    cur.close()
+    conn.close()
+    
+    if row:
+        return {
+            'id': row[0],
+            'username': row[1],
+            'email': row[2],
+            'password_hash': row[3],
+            'full_name': row[4],
+            'is_active': row[5]
+        }
+    return None
+
+
+def create_user(username, email, password_hash, full_name=None):
+    """Create a new user."""
+    conn = get_database_connection()
+    if conn is None:
+        return None
+    
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            INSERT INTO users (username, email, password_hash, full_name)
+            VALUES (%s, %s, %s, %s)
+            RETURNING id, username, email, full_name
+        """, (username, email, password_hash, full_name))
+        
+        row = cur.fetchone()
+        conn.commit()
+        cur.close()
+        conn.close()
+        
+        return {
+            'id': row[0],
+            'username': row[1],
+            'email': row[2],
+            'full_name': row[3]
+        }
+    except Exception as e:
+        conn.rollback()
+        cur.close()
+        conn.close()
+        print(f"❌ Error creating user: {e}")
+        return None
+
 if __name__ == "__main__":
     create_tables()
     print("✅Database setup complete!!")
