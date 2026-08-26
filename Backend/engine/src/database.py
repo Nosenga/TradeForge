@@ -261,7 +261,7 @@ def create_user(username, email, password_hash, full_name=None):
         cur.execute("""
             INSERT INTO users (username, email, password_hash, full_name)
             VALUES (%s, %s, %s, %s)
-            RETURNING id, username, email, full_name
+            RETURNING id, username, email, full_name, is_active
         """, (username, email, password_hash, full_name))
         
         row = cur.fetchone()
@@ -273,7 +273,8 @@ def create_user(username, email, password_hash, full_name=None):
             'id': row[0],
             'username': row[1],
             'email': row[2],
-            'full_name': row[3]
+            'full_name': row[3],
+            'is_active': row[4]  # ✅ Added this
         }
     except Exception as e:
         conn.rollback()

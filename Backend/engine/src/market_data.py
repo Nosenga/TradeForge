@@ -3,6 +3,14 @@ import requests
 import pandas as pd
 from dotenv import load_dotenv
 from database import get_market_data, insert_market_data
+from fastapi import HTTPException
+
+TWELVEDATA_INTERVAL_MAP = {
+    "1h" : "1h",
+    "4h" : "4h",
+    "1d" : "1day",
+    "1w" : "1week",
+}
 
 load_dotenv()
 
@@ -38,11 +46,17 @@ BASE_URL = "https://api.twelvedata.com"
 
 def fetch_ohlcv(symbol, interval="1h", outputsize=100):
     """Fetch OHLCV data from Twelve Data API."""
+    
+    # Map interval to Twelve Data format
+    td_interval = TWELVEDATA_INTERVAL_MAP.get(interval, interval)
+    
+    # Format symbol for API
     formatted_symbol = format_symbol_for_api(symbol)
+    
     url = f"{BASE_URL}/time_series"
     params = {
-        "symbol": formatted_symbol,
-        "interval": interval,
+        "symbol": formatted_symbol,  # ✅ Use formatted symbol
+        "interval": td_interval,      # ✅ Use mapped interval
         "outputsize": outputsize,
         "apikey": API_KEY
     }
@@ -58,25 +72,20 @@ def fetch_ohlcv(symbol, interval="1h", outputsize=100):
         
         # Convert to DataFrame
         df = pd.DataFrame(data['values'])
-
+        
         # Check required columns
         required_columns = {'datetime', 'open', 'high', 'low', 'close'}
         for col in required_columns:
             if col not in df.columns:
                 raise Exception(f"Missing required column: {col}")
-
-
-         # ---------------------------------------------
         
+        # Add volume column if missing
         if 'volume' not in df.columns:
-            df['volume'] = 0.0  # Add volume column with default value 0.0 if missing
-        
-        
-        # ----------------------------------------------
+            df['volume'] = 0.0
         
         # Rename datetime column to timestamp
         df.rename(columns={'datetime': 'timestamp'}, inplace=True)
-       
+        
         # Convert to proper types
         df['timestamp'] = pd.to_datetime(df['timestamp'])
         df['open'] = df['open'].astype(float)
@@ -89,6 +98,8 @@ def fetch_ohlcv(symbol, interval="1h", outputsize=100):
         
     except requests.exceptions.Timeout:
         raise Exception("API request timed out")
+    except requests.exceptions.HTTPError as e:
+        raise Exception(f"API HTTP error: {e}")
     except requests.exceptions.RequestException as e:
         raise Exception(f"API request failed: {e}")
     except Exception as e:
@@ -101,6 +112,14 @@ def save_market_data(symbol, timeframe, df):
 
 def get_or_fetch_market_data(symbol, timeframe="1h", limit=100):
     """Get from DB or fetch from API if not enough data."""
+
+    # ✅ This part is good
+    if timeframe == "1d":
+        api_limit = min(limit, 90)
+        print(f"📊 Daily timeframe: adjusting limit from {limit} to {api_limit}")
+    else:
+        api_limit = limit
+
     # Try to get from database first
     db_data = get_market_data(symbol, timeframe, limit)
     
@@ -109,9 +128,9 @@ def get_or_fetch_market_data(symbol, timeframe="1h", limit=100):
         print(f"✅ Found {len(db_data)} records in database for {symbol} ({timeframe})")
         return db_data
     
-    # Otherwise fetch from API
-    print(f"🔄 Fetching {limit} candles from API for {symbol} ({timeframe})...")
-    df = fetch_ohlcv(symbol, timeframe, limit)
+    # ✅ FIX: Use api_limit here, not limit
+    print(f"🔄 Fetching {api_limit} candles from API for {symbol} ({timeframe})...")
+    df = fetch_ohlcv(symbol, timeframe, api_limit)  # ✅ Use api_limit
     
     # Save to database
     save_market_data(symbol, timeframe, df)
@@ -129,6 +148,10 @@ def get_or_fetch_market_data(symbol, timeframe="1h", limit=100):
         })
     
     return data
+
+
+
+
 
 
 if __name__ == "__main__":
