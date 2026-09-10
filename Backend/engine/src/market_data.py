@@ -149,8 +149,7 @@ def get_or_fetch_market_data(symbol, timeframe="1h", limit=100):
     
     return data
 
-
-
+    
 
 
 
@@ -168,3 +167,24 @@ if __name__ == "__main__":
         print(f"Latest price: {data[0]['close']} at {data[0]['timestamp']}")
     else:
         print("❌ No data retrieved")
+
+class MarketProvider:
+    def fetch_ohlcv(self, symbol,interval,outputsize):
+        pass
+
+class TwelveDataProvider(MarketProvider):
+    def fetch_ohlcv(self, symbol, interval, outputsize):
+        pass
+
+class TraderMadeProvider(MarketProvider):
+    def fetch_ohlcv(self, symbol, interval, outputsize):
+        # For Future implementation, we would implement the logic to fetch OHLCV data from TraderMade API.
+        # This could involve using TraderMade's API endpoints to retrieve historical price data.
+        pass
+
+class MetaTraderProvider(MarketProvider):
+    def fetch_ohlcv(self, symbol, interval, outputsize):
+        # For MetaTrader Bridge, we would implement the logic to fetch OHLCV data from MetaTrader. 
+        # This could involve using MetaTrader's API or a bridge service that allows us to retrieve historical price data. 
+        # The implementation would depend on the specific MetaTrader setup and available endpoints.
+        pass

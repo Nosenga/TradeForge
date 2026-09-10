@@ -283,6 +283,59 @@ def create_user(username, email, password_hash, full_name=None):
         print(f"❌ Error creating user: {e}")
         return None
 
+
+def create_trading_tables():
+    """Create orders and positions tables if they don't exist."""
+    conn = get_database_connection()
+    if conn is None:
+        return
+    
+    cur = conn.cursor()
+    
+    # Orders table
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS orders (
+            order_id VARCHAR(50) PRIMARY KEY,
+            user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+            symbol VARCHAR(20) NOT NULL,
+            action VARCHAR(10) NOT NULL,
+            lot_size DECIMAL(10,2) NOT NULL,
+            order_type VARCHAR(10) DEFAULT 'MARKET',
+            entry_price DECIMAL(20,8),
+            stop_loss DECIMAL(20,8),
+            take_profit DECIMAL(20,8),
+            status VARCHAR(20) DEFAULT 'PENDING',
+            created_at TIMESTAMP DEFAULT NOW(),
+            filled_at TIMESTAMP,
+            filled_price DECIMAL(20,8)
+        )
+    """)
+    
+    # Positions table
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS positions (
+            position_id VARCHAR(50) PRIMARY KEY,
+            order_id VARCHAR(50) REFERENCES orders(order_id),
+            user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+            symbol VARCHAR(20) NOT NULL,
+            action VARCHAR(10) NOT NULL,
+            lots DECIMAL(10,2) NOT NULL,
+            entry_price DECIMAL(20,8) NOT NULL,
+            stop_loss DECIMAL(20,8),
+            take_profit DECIMAL(20,8),
+            current_price DECIMAL(20,8),
+            pnl DECIMAL(20,2) DEFAULT 0,
+            open_time TIMESTAMP DEFAULT NOW(),
+            close_time TIMESTAMP,
+            status VARCHAR(20) DEFAULT 'OPEN'
+        )
+    """)
+    
+    conn.commit()
+    cur.close()
+    conn.close()
+    print("✅ Trading tables created successfully")
+
 if __name__ == "__main__":
     create_tables()
     print("✅Database setup complete!!")

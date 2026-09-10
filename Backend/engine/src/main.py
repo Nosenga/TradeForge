@@ -14,6 +14,7 @@ from auth import(
     get_current_user_from_token
 )
 from fastapi.middleware.cors import CORSMiddleware
+from database import create_trading_tables
 
 
 app = FastAPI(title="TradeForge Trading Engine", version="1.0.0")
@@ -29,6 +30,7 @@ app.add_middleware(
 
 
 create_users_table()
+create_trading_tables()
 
 
 
@@ -735,3 +737,93 @@ async def run_backtest(request: BacktestRequest):  # ✅ Use request body
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================
+# TRADING ENDPOINTS
+# ============================================
+
+from orders import OrderManager
+from pydantic import BaseModel, Field
+
+class OrderRequest(BaseModel):
+    symbol: str
+    action: str # BUY or SELL
+    lot_size: float = Field(..., gt=0, description="Lot size must be greater than 0")
+    stop_loss: float = None
+    take_profit: float = None
+
+
+@app.post("/api/v1/trade/order")
+async def place_order(
+
+    request: OrderRequest,
+    current_user: dict = Depends(get_current_user_from_token)
+
+):
+    """Place Order."""
+    try:
+        # Convert to float to be safe
+        lot_size = float(request.lot_size)
+        
+        #Validate action
+        if request.action not in ['BUY','SELL']:
+            raise HTTPException(400, "Action must be BUY or SELL")
+
+        #Validate lot size
+        if lot_size <=0:
+            raise HTTPException(400 , "Lot size must be greater than 0")
+
+        order_manager = OrderManager(current_user['id'])
+        order = order_manager.place_order(
+            symbol= request.symbol,
+            action=request.action,
+            lot_size=request.lot_size,
+            stop_loss=request.stop_loss,
+            take_profit=request.take_profit
+        )
+
+        if not order:
+            raise HTTPException(500 , "Failed to place order")
+
+        return {
+            "order_id":order.order_id,
+            "symbol":order.symbol,
+            "action":order.action,
+            "lot_size":order.lot_size,
+            "status": order.status,
+            "filled_price":order.filled_price,
+            "created_at":order.created_at
+        }
+    
+    except ValueError:
+        raise HTTPException(400, "Lot size must be a valid number")
+    
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+@app.get("/api/v1/trade/orders")
+async def get_orders(
+    status: str = None,
+    current_user: dict = Depends(get_current_user_from_token)
+):
+    """Get user's orders."""
+    try:
+        orders = OrderManager.get_orders(current_user['id'], status)
+        return {"orders": orders}
+        
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+
+@app.get("/api/v1/trade/positions")
+async def get_positions(
+    current_user: dict = Depends(get_current_user_from_token)
+):
+    """Get user's open positions."""
+    try:
+        positions = OrderManager.get_positions(current_user['id'])
+        return {"positions": positions}
+        
+    except Exception as e:
+        raise HTTPException(500, str(e))
