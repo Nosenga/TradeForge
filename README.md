@@ -84,7 +84,7 @@ A comprehensive algorithmic trading platform with market data, technical indicat
 | **React Router DOM** | Client-side routing |
 
 ---
-
+```
 ## 📂 Project Structure
 TradeForge/
 ├── Backend/
@@ -131,6 +131,7 @@ TradeForge/
 ├── .env.example # Environment variables template
 ├── .gitignore
 └── README.md
+```
 ---
 
 ## 🚀 Installation
