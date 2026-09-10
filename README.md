@@ -84,8 +84,9 @@ A comprehensive algorithmic trading platform with market data, technical indicat
 | **React Router DOM** | Client-side routing |
 
 ---
-```
+
 ## 📂 Project Structure
+```
 TradeForge/
 ├── Backend/
 │ └── engine/
