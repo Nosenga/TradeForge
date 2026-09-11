@@ -112,7 +112,7 @@ const Backtest: React.FC = () => {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 content-fade-in">
       <h1 className="text-2xl font-bold text-white">Backtesting</h1>
 
       {/* Configuration */}

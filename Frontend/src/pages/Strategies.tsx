@@ -11,6 +11,7 @@ import {
   Target
 } from 'lucide-react';
 import api from '../api/client';
+import { SkeletonStats, SkeletonStrategyCard } from '../components/Skeleton';
 
 interface Strategy {
   id: number;
@@ -151,8 +152,9 @@ const Strategies: React.FC = () => {
     alert(`Backtesting ${strategy.name}...`);
   };
 
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 content-fade-in">
       {/* Header */}
       <div className="flex justify-between items-center">
         <h1 className="text-2xl font-bold text-white">Trading Strategies</h1>
@@ -196,7 +198,14 @@ const Strategies: React.FC = () => {
 
       {/* Strategies Grid */}
       {loading ? (
-        <div className="flex items-center justify-center h-64 text-gray-400">Loading strategies...</div>
+        <div className="space-y-6">
+          <SkeletonStats count={4} />
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {[1, 2, 3, 4].map((i) => (
+              <SkeletonStrategyCard key={i} />
+            ))}
+          </div>
+        </div>
       ) : error ? (
         <div className="flex items-center justify-center h-64 text-red-500">{error}</div>
       ) : (

@@ -51,3 +51,53 @@ export const marketData = {
   getLatest: (symbol: string) =>
     api.get(`/api/v1/market-data/${symbol}/latest`),
 };
+
+// Trading endpoints
+export const trading = {
+  // Place a manual order
+  placeOrder: (data: {
+    symbol: string;
+    action: string;
+    lot_size: number;
+    stop_loss?: number;
+    take_profit?: number;
+  }) => api.post('/api/v1/trade/order', data),
+  
+  // Get all orders
+  getOrders: (status?: string) => 
+    api.get(`/api/v1/trade/orders${status ? `?status=${status}` : ''}`),
+  
+  // Get open positions
+  getPositions: () => api.get('/api/v1/trade/positions'),
+
+  closePosition: (positionId: string) =>
+    api.post(`/api/v1/trade/close/${positionId}`),
+  cleanup: () => api.post('/api/v1/trade/cleanup'),
+};
+
+// Bot endpoints
+export const bots = {
+  // Create a new bot
+  create: (data: {
+    strategy_id: number;
+    symbol: string;
+    timeframe: string;
+    lot_size: number;
+    risk_percent: number;
+    stop_loss_pips: number;
+    take_profit_pips: number;
+    min_confidence: number;
+  }) => api.post('/api/v1/bots/create', data),
+  
+  // Start a bot
+  start: (botId: number) => api.post(`/api/v1/bots/${botId}/start`),
+  
+  // Stop a bot
+  stop: (botId: number) => api.post(`/api/v1/bots/${botId}/stop`),
+
+  // Delete a bot
+  delete: (botId: number) => api.delete(`/api/v1/bots/${botId}`),
+  
+  // Get all bots
+  getAll: () => api.get('/api/v1/bots'),
+};

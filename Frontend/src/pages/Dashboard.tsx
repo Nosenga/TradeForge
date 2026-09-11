@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { signals } from '../api/client';
+import { SkeletonStats, SkeletonSignalCard, Skeleton } from '../components/Skeleton';
 
 interface Signal {
   symbol: string;
@@ -21,11 +22,11 @@ const Dashboard: React.FC = () => {
 
   useEffect(() => {
     fetchSignals();
+    const interval = setInterval(fetchSignals, 30000);
+    return () => clearInterval(interval);
   }, []);
 
   const fetchSignals = async () => {
-    setLoading(true);
-    setError('');
     try {
       const response = await signals.getMultiSignals(symbols);
       setSignalData(response.data.results || {});
@@ -36,19 +37,29 @@ const Dashboard: React.FC = () => {
     }
   };
 
-  const getSignalColor = (action: string) => {
+  const getSignalStyles = (action: string) => {
     switch (action) {
-      case 'BUY': return 'text-green-500';
-      case 'SELL': return 'text-red-500';
-      default: return 'text-yellow-500';
-    }
-  };
-
-  const getSignalBg = (action: string) => {
-    switch (action) {
-      case 'BUY': return 'bg-green-500/10 border-green-500';
-      case 'SELL': return 'bg-red-500/10 border-red-500';
-      default: return 'bg-yellow-500/10 border-yellow-500';
+      case 'BUY':
+        return {
+          badge: 'badge-green',
+          text: 'text-trade-green',
+          progress: 'progress-green',
+          icon: '▲',
+        };
+      case 'SELL':
+        return {
+          badge: 'badge-red',
+          text: 'text-trade-red',
+          progress: 'progress-red',
+          icon: '▼',
+        };
+      default:
+        return {
+          badge: 'badge-yellow',
+          text: 'text-trade-yellow',
+          progress: 'progress-blue',
+          icon: '●',
+        };
     }
   };
 
@@ -57,87 +68,151 @@ const Dashboard: React.FC = () => {
   const sellCount = Object.values(signalData).filter(s => s.action === 'SELL').length;
   const holdCount = Object.values(signalData).filter(s => s.action === 'HOLD').length;
 
+  
+
   return (
-    <div>
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold text-white">Dashboard</h1>
-        <span className="text-gray-400">Welcome, {user?.username}!</span>
+    <div className="space-y-6 content-fade-in">
+      {/* Header */}
+      <div className="flex justify-between items-end mb-8">
+        <div>
+          <h1 className="text-4xl font-bold text-text-primary mb-2">
+            Welcome back, <span className="gradient-text">{user?.username}</span>
+          </h1>
+          <p className="text-text-secondary">
+            Live market signals and trading overview
+          </p>
+        </div>
+        <div className="flex items-center gap-2 text-text-secondary text-sm">
+          <span className="status-dot-green"></span>
+          <span>Live</span>
+        </div>
       </div>
 
+      {/* Stats Bento Grid */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="glass glass-hover p-5 flex flex-col gap-2">
+          <span className="stat-label">Total Signals</span>
+          <span className="stat-value">{signalCount}</span>
+          <div className="progress">
+            <div className="progress-fill progress-blue w-full"></div>
+          </div>
+        </div>
+        
+        <div className="glass glass-hover p-5 flex flex-col gap-2">
+          <span className="stat-label">Buy Signals</span>
+          <span className="stat-value text-trade-green">{buyCount}</span>
+          <div className="progress">
+            <div 
+              className="progress-fill progress-green"
+              style={{ width: `${signalCount ? (buyCount / signalCount) * 100 : 0}%` }}
+            ></div>
+          </div>
+        </div>
+        
+        <div className="glass glass-hover p-5 flex flex-col gap-2">
+          <span className="stat-label">Sell Signals</span>
+          <span className="stat-value text-trade-red">{sellCount}</span>
+          <div className="progress">
+            <div 
+              className="progress-fill progress-red"
+              style={{ width: `${signalCount ? (sellCount / signalCount) * 100 : 0}%` }}
+            ></div>
+          </div>
+        </div>
+        
+        <div className="glass glass-hover p-5 flex flex-col gap-2">
+          <span className="stat-label">Hold Signals</span>
+          <span className="stat-value text-trade-yellow">{holdCount}</span>
+          <div className="progress">
+            <div 
+              className="progress-fill progress-blue"
+              style={{ width: `${signalCount ? (holdCount / signalCount) * 100 : 0}%` }}
+            ></div>
+          </div>
+        </div>
+      </div>
+
+      {/* Signal Cards */}
       {loading ? (
-        <div className="text-center py-12 text-gray-400">Loading signals...</div>
+        <div className = "space-y-8">
+          {/* Header Skeleton */}
+          <div className="flex justify-between items-end">
+            <div className="space-y-3">
+              <Skeleton height="40px" width="320px" />
+              <Skeleton height="20px" width="240px" />
+            </div>
+            <Skeleton height="20px" width="80px" />
+          </div>
+          {/* Stats Skeleton */}
+          <SkeletonStats count={4} />
+          {/* Signal Cards Skeleton */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {[1, 2, 3].map((i) => (
+              <SkeletonSignalCard key={i} />
+            ))}
+            </div>
+        </div> 
+
       ) : error ? (
-        <div className="text-center py-12 text-red-500">{error}</div>
+        <div className="glass p-8 text-center text-trade-red">
+          {error}
+        </div>
       ) : (
-        <>
-          {/* Signal Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-            {symbols.map((symbol) => {
-              const signal = signalData[symbol];
-              if (!signal) return null;
-
-              return (
-                <div
-                  key={symbol}
-                  className={`bg-trade-card rounded-xl p-6 border ${getSignalBg(signal.action)}`}
-                >
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <h3 className="text-xl font-bold text-white">{symbol}</h3>
-                      <p className="text-gray-400 text-sm">
-                        ${signal.price.toFixed(symbol === 'BTCUSD' ? 2 : 5)}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <div className={`text-lg font-bold ${getSignalColor(signal.action)}`}>
-                        {signal.action}
-                      </div>
-                      <div className="text-sm text-gray-400">
-                        {Math.round(signal.confidence * 100)}% confidence
-                      </div>
-                    </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {symbols.map((symbol) => {
+            const signal = signalData[symbol];
+            if (!signal) return null;
+            const styles = getSignalStyles(signal.action);
+            
+            return (
+              <div key={symbol} className="glass glass-hover p-6 animate-slide-up">
+                {/* Header */}
+                <div className="flex justify-between items-start mb-5">
+                  <div>
+                    <h3 className="text-xl font-bold text-text-primary font-mono tracking-tight">
+                      {symbol}
+                    </h3>
+                    <p className="text-text-secondary text-sm mt-1 font-mono">
+                      ${signal.price.toFixed(symbol === 'BTCUSD' ? 2 : 5)}
+                    </p>
                   </div>
+                  <span className={styles.badge}>
+                    <span>{styles.icon}</span>
+                    {signal.action}
+                  </span>
+                </div>
 
-                  <div className="mt-4">
-                    {signal.reasons && signal.reasons.length > 0 && (
-                      <div className="text-sm text-gray-400 space-y-1">
-                        {signal.reasons.slice(0, 3).map((reason, i) => (
-                          <div key={i} className="flex items-start gap-2">
-                            <span className="text-blue-400">•</span>
-                            <span>{reason}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
+                {/* Confidence */}
+                <div className="mb-5">
+                  <div className="flex justify-between text-sm mb-2">
+                    <span className="text-text-tertiary">Confidence</span>
+                    <span className={`font-bold font-mono ${styles.text}`}>
+                      {Math.round(signal.confidence * 100)}%
+                    </span>
+                  </div>
+                  <div className="progress">
+                    <div
+                      className={`progress-fill ${styles.progress}`}
+                      style={{ width: `${signal.confidence * 100}%` }}
+                    ></div>
                   </div>
                 </div>
-              );
-            })}
-          </div>
 
-          {/* Summary */}
-          <div className="bg-trade-card rounded-xl p-6 border border-trade-border">
-            <h2 className="text-white font-bold mb-4">Signal Summary</h2>
-            <div className="grid grid-cols-4 gap-4 text-center">
-              <div>
-                <div className="text-blue-400 text-2xl font-bold">{signalCount}</div>
-                <div className="text-gray-400 text-sm">Total Signals</div>
+                {/* Reasons */}
+                {signal.reasons && signal.reasons.length > 0 && (
+                  <div className="space-y-2 pt-4 border-t border-trade-border/50">
+                    {signal.reasons.slice(0, 3).map((reason, i) => (
+                      <div key={i} className="flex items-start gap-2 text-xs text-text-secondary">
+                        <span className={`${styles.text} mt-0.5`}>▸</span>
+                        <span>{reason}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
-              <div>
-                <div className="text-green-500 text-2xl font-bold">{buyCount}</div>
-                <div className="text-gray-400 text-sm">Buy</div>
-              </div>
-              <div>
-                <div className="text-red-500 text-2xl font-bold">{sellCount}</div>
-                <div className="text-gray-400 text-sm">Sell</div>
-              </div>
-              <div>
-                <div className="text-yellow-500 text-2xl font-bold">{holdCount}</div>
-                <div className="text-gray-400 text-sm">Hold</div>
-              </div>
-            </div>
-          </div>
-        </>
+            );
+          })}
+        </div>
       )}
     </div>
   );

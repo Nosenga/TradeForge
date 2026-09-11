@@ -9,6 +9,10 @@ import {
   type UTCTimestamp
 } from 'lightweight-charts';
 import { marketData } from '../api/client';
+import toast from 'react-hot-toast';
+import { ToastSuccess } from '../components/ToastIcons';
+
+
 
 interface TradingChartProps {
   symbol?: string;
@@ -183,6 +187,8 @@ const TradingChart: React.FC<TradingChartProps> = ({
     
     fetchAndRender();
   }, [symbol, timeframe]);
+
+  toast.custom((t) => <ToastSuccess message="Bot created!" />);
 
   return (
     <div className="bg-trade-card rounded-xl p-6 border border-trade-border">

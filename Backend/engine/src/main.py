@@ -2,7 +2,7 @@ from fastapi import FastAPI, Query, HTTPException, Depends, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from datetime import datetime
 from pydantic import BaseModel, Field
-from database import get_market_data
+from database import create_bots_table, get_market_data
 from market_data import get_or_fetch_market_data
 from strategies import analyze_symbol, get_strategy_signal
 from database import get_user_by_username, get_user_by_email, create_user,create_users_table
@@ -14,7 +14,7 @@ from auth import(
     get_current_user_from_token
 )
 from fastapi.middleware.cors import CORSMiddleware
-from database import create_trading_tables
+from database import create_trading_tables, create_bots_table, create_users_table
 
 
 app = FastAPI(title="TradeForge Trading Engine", version="1.0.0")
@@ -31,6 +31,15 @@ app.add_middleware(
 
 create_users_table()
 create_trading_tables()
+create_bots_table()
+
+# Start scheduler on app startup
+@app.on_event("startup")
+async def startup_event():
+    """Start the bot scheduler on app startup."""
+    import asyncio
+    asyncio.create_task(bot_scheduler.run_scheduler_loop())
+    print("🤖 Bot scheduler ready.")
 
 
 
@@ -827,3 +836,173 @@ async def get_positions(
         
     except Exception as e:
         raise HTTPException(500, str(e))
+
+# ============================================
+# BOT SCHEDULER ENDPOINTS
+# ============================================
+
+from bot_scheduler import bot_scheduler
+
+class CreateBotRequest(BaseModel):
+    strategy_id: int
+    symbol: str
+    timeframe: str = "1h"
+    lot_size: float = 0.01
+    risk_percent: float = 1.0
+    stop_loss_pips: int = 50
+    take_profit_pips: int = 100
+    min_confidence: float = 0.6
+
+@app.post("/api/v1/bots/create")
+async def create_bot(
+    request: CreateBotRequest,
+    current_user: dict = Depends(get_current_user_from_token)
+):
+    """Create a new trading bot."""
+    result = bot_scheduler.create_bot(
+        user_id=current_user['id'],
+        strategy_id=request.strategy_id,
+        symbol=request.symbol,
+        timeframe=request.timeframe,
+        lot_size=request.lot_size,
+        risk_percent=request.risk_percent,
+        stop_loss_pips=request.stop_loss_pips,
+        take_profit_pips=request.take_profit_pips,
+        min_confidence=request.min_confidence
+    )
+    
+    if 'error' in result:
+        raise HTTPException(400, result['error'])
+    
+    return result
+
+
+@app.post("/api/v1/bots/{bot_id}/start")
+async def start_bot(
+    bot_id: int,
+    current_user: dict = Depends(get_current_user_from_token)
+):
+    """Start a bot."""
+    result = bot_scheduler.start_bot(bot_id)
+    
+    if 'error' in result:
+        raise HTTPException(404, result['error'])
+    
+    return result
+
+
+@app.post("/api/v1/bots/{bot_id}/stop")
+async def stop_bot(
+    bot_id: int,
+    current_user: dict = Depends(get_current_user_from_token)
+):
+    """Stop a bot."""
+    result = bot_scheduler.stop_bot(bot_id)
+    
+    if 'error' in result:
+        raise HTTPException(404, result['error'])
+    
+    return result
+
+
+@app.get("/api/v1/bots")
+async def get_bots(
+    current_user: dict = Depends(get_current_user_from_token)
+):
+    """Get user's bots."""
+    bots = bot_scheduler.get_all_bots(current_user['id'])
+    return {"bots": bots}
+
+@app.delete("/api/v1/bots/{bot_id}")
+async def delete_bot(
+    bot_id: int,
+    current_user: dict = Depends(get_current_user_from_token)
+):
+    """Delete a bot permanently."""
+    result = bot_scheduler.delete_bot(bot_id, current_user['id'])
+    
+    if 'error' in result:
+        if 'not found' in result['error'].lower():
+            raise HTTPException(404, result['error'])
+        elif 'permission' in result['error'].lower():
+            raise HTTPException(403, result['error'])
+        else:
+            raise HTTPException(400, result['error'])
+    
+    return result
+
+@app.post("/api/v1/trade/close/{position_id}")
+async def close_position_endpoint(
+    position_id: str,
+    current_user: dict = Depends(get_current_user_from_token)
+):
+    """Close a position manually at current market price."""
+    from market_data import get_or_fetch_market_data
+    from orders import OrderManager
+    
+    # Verify ownership
+    positions = OrderManager.get_positions(current_user['id'])
+    position = next((p for p in positions if p['position_id'] == position_id), None)
+    
+    if not position:
+        raise HTTPException(404, "Position not found or already closed")
+    
+    # Get current price
+    data = get_or_fetch_market_data(position['symbol'], "1h", 1)
+    if not data:
+        raise HTTPException(500, "Could not fetch current price")
+    
+    current_price = float(data[0]['close'])
+    
+    success = OrderManager.close_position(
+        position_id=position_id,
+        exit_price=current_price,
+        reason="manual"
+    )
+    
+    if not success:
+        raise HTTPException(500, "Failed to close position")
+    
+    return {
+        "position_id": position_id,
+        "status": "CLOSED",
+        "exit_price": current_price
+    }
+
+@app.post("/api/v1/trade/cleanup")
+async def cleanup_positions(
+    current_user: dict = Depends(get_current_user_from_token)
+):
+    """Close all open positions for the current user."""
+    from market_data import get_or_fetch_market_data
+    from orders import OrderManager
+    
+    positions = OrderManager.get_positions(current_user['id'])
+    closed_count = 0
+    errors = []
+    
+    for position in positions:
+        try:
+            data = get_or_fetch_market_data(position['symbol'], "1h", 1)
+            if not data:
+                errors.append(f"No price for {position['symbol']}")
+                continue
+            
+            current_price = float(data[0]['close'])
+            
+            success = OrderManager.close_position(
+                position_id=position['position_id'],
+                exit_price=current_price,
+                reason="cleanup"
+            )
+            
+            if success:
+                closed_count += 1
+        except Exception as e:
+            errors.append(f"{position['symbol']}: {str(e)}")
+    
+    return {
+        "closed": closed_count,
+        "total": len(positions),
+        "errors": errors if errors else None
+    }
