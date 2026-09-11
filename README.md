@@ -86,6 +86,7 @@ A comprehensive algorithmic trading platform with market data, technical indicat
 ---
 
 ## 📂 Project Structure
+```
 TradeForge/
 ├── Backend/
 │ └── engine/
@@ -131,6 +132,7 @@ TradeForge/
 ├── .env.example # Environment variables template
 ├── .gitignore
 └── README.md
+```
 ---
 
 ## 🚀 Installation
