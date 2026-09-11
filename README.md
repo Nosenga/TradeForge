@@ -442,7 +442,7 @@ Interactive docs: ```https://localhost:8000/docs```
 ---
 
 ## 🗺️ Roadmap
-
+```
 [x] Phase 1: Data Layer — Market data + caching
 [x] Phase 2: Indicators & Signals — 6 indicators + voting engine
 [x] Phase 3: Authentication — JWT login/registration
@@ -458,7 +458,7 @@ Interactive docs: ```https://localhost:8000/docs```
 [] Phase 13: Mobile Responsive — Phone-friendly UI
 [] Phase 14: Custom Strategy Builder — User-created strategies
 [] Phase 15: Deployment — AWS/DigitalOcean production
-
+```
 ---
 ## 🖼️ Screenshots
 
