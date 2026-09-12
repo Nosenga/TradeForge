@@ -19,6 +19,7 @@ from database import create_trading_tables, create_bots_table, create_users_tabl
 from mt_bridge import mt_bridge
 
 
+
 app = FastAPI(title="TradeForge Trading Engine", version="1.0.0")
 
 # CORS - Allow frontend to talk to backend
@@ -52,7 +53,7 @@ async def startup_event():
 @app.on_event("shutdown")
 async def shutdown_event():
     """Stop the bot scheduler and MT bridge on app shutdown."""
-    await bot_scheduler.stop_scheduler_loop()
+    bot_scheduler.running = False
     print("🤖 Bot scheduler stopped.")
     await mt_bridge.stop()
 
@@ -1201,6 +1202,36 @@ async def reset_account(
     try:
         result = PaperAccountManager.reset(current_user['id'], new_balance)
         return result
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+# ============================================
+# NEWS & ECONOMIC CALENDAR
+# ============================================
+
+from news_calendar import  MarketNews
+
+
+@app.get("/api/v1/news")
+async def get_news(
+    category: str = "general",
+    limit: int = 10,
+    current_user: dict = Depends(get_current_user_from_token)
+):
+    """Get market news."""
+    try:
+        if category == "forex":
+            news = MarketNews.get_merged_news(limit)
+        elif category == "crypto":
+            news = MarketNews.get_crypto_news(limit)
+        else:
+            news = MarketNews.get_general_news(limit)
+        
+        return {
+            "news": news,
+            "count": len(news),
+            "category": category,
+        }
     except Exception as e:
         raise HTTPException(500, str(e))
 

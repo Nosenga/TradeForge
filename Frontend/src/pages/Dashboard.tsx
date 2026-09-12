@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { dashboard as dashboardApi, marketOverview, marketStatus } from '../api/client';
+import { dashboard as dashboardApi, marketOverview, marketStatus, news as newsApi } from '../api/client';
 import { Skeleton, SkeletonStats } from '../components/Skeleton';
 import { 
   TrendingUp, 
@@ -74,6 +74,15 @@ interface MarketData {
   };
 }
 
+interface NewsItem {
+  headline: string;
+  summary: string;
+  source: string;
+  url: string;
+  image: string;
+  datetime: number;
+}
+
 const Dashboard: React.FC = () => {
   const { user } = useAuth();
   const [data, setData] = useState<DashboardData | null>(null);
@@ -95,15 +104,17 @@ const Dashboard: React.FC = () => {
     else setRefreshing(true);
     
     try {
-      const [dashResponse, marketResponse, statusResponse] = await Promise.all([
+      const [dashResponse, marketResponse, statusResponse, newsResponse] = await Promise.all([
         dashboardApi.getSummary(),
         marketOverview.get(),
         marketStatus.get(),
+        newsApi.get()
       ]);
       
       setData(dashResponse.data);
       setMarketData(marketResponse.data.markets || []);
       setMarketStatusData(statusResponse.data);
+      setNewsData(newsResponse.data.news || []);
       setLastUpdated(new Date());
       setError('');
     } catch (err: any) {
@@ -124,6 +135,8 @@ const Dashboard: React.FC = () => {
     const prefix = value >= 0 ? '+' : '';
     return `${prefix}$${Math.abs(value).toFixed(2)}`;
   };
+
+  const [newsData, setNewsData] = useState<NewsItem[]>([]);
 
   if (loading) {
     return (
@@ -425,28 +438,92 @@ const Dashboard: React.FC = () => {
       {/* MARKET CONTEXT */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="glass p-6">
-          <div className="flex items-center gap-2 mb-4">
-            <Newspaper className="w-5 h-5 text-trade-blue" />
-            <h2 className="text-lg font-bold text-text-primary">Market News</h2>
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <Newspaper className="w-5 h-5 text-trade-blue" />
+              <h2 className="text-lg font-bold text-text-primary">Market News</h2>
+            </div>
+            <span className="text-xs text-text-tertiary">Live feed</span>
           </div>
-          <div className="text-center py-6">
-            <p className="text-text-tertiary text-sm mb-2">Coming soon</p>
-            <p className="text-text-tertiary text-xs">
-              Integration with Twelve Data News API
+          
+          {newsData.length === 0 ? (
+            <p className="text-text-tertiary text-center py-6 text-sm">
+              Loading news...
             </p>
-          </div>
+          ) : (
+            <div className="space-y-3 max-h-[400px] overflow-y-auto">
+              {newsData.map((item, index) => (
+                <a
+                  key={index}
+                  href={item.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block p-3 rounded-lg bg-trade-bg/50 border border-trade-border hover:border-trade-blue/50 transition group"
+                >
+                  <div className="flex items-start gap-3">
+                    <div className="flex-1 min-w-0">
+                      <h3 className="text-text-primary text-sm font-medium mb-1 group-hover:text-trade-blue transition line-clamp-2">
+                        {item.headline}
+                      </h3>
+                      {item.summary && (
+                        <p className="text-text-tertiary text-xs line-clamp-2 mb-2">
+                          {item.summary}
+                        </p>
+                      )}
+                      <div className="flex items-center gap-2 text-xs">
+                        <span className="text-trade-blue font-medium">{item.source}</span>
+                        <span className="text-text-tertiary">•</span>
+                        <span className="text-text-tertiary">
+                          {new Date(item.datetime * 1000).toLocaleTimeString([], { 
+                            hour: '2-digit', 
+                            minute: '2-digit' 
+                          })}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </a>
+              ))}
+            </div>
+          )}
         </div>
 
         <div className="glass p-6">
           <div className="flex items-center gap-2 mb-4">
             <Calendar className="w-5 h-5 text-trade-blue" />
-            <h2 className="text-lg font-bold text-text-primary">Economic Calendar</h2>
+            <h2 className="text-lg font-bold text-text-primary">Market Sessions</h2>
           </div>
-          <div className="text-center py-6">
-            <p className="text-text-tertiary text-sm mb-2">Coming soon</p>
-            <p className="text-text-tertiary text-xs">
-              Integration with Finnhub Economic Calendar
-            </p>
+
+          <div className="space-y-3">
+            {[
+              { name: 'Sydney', flag: '🇦🇺', openUTC: 21, closeUTC: 6 },
+              { name: 'Tokyo', flag: '🇯🇵', openUTC: 0, closeUTC: 9 },
+              { name: 'London', flag: '🇬🇧', openUTC: 7, closeUTC: 16 },
+              { name: 'New York', flag: '🇺🇸', openUTC: 12, closeUTC: 21 },
+            ].map((session) => {
+              const now = new Date();
+              const hour = now.getUTCHours();
+              const isOpen = session.openUTC < session.closeUTC
+                ? hour >= session.openUTC && hour < session.closeUTC
+                : hour >= session.openUTC || hour < session.closeUTC;
+
+              return (
+                <div key={session.name} className="flex items-center justify-between p-3 bg-trade-bg/50 rounded-lg border border-trade-border">
+                  <div className="flex items-center gap-3">
+                    <span className="text-lg">{session.flag}</span>
+                    <div>
+                      <p className="text-text-primary text-sm font-medium">{session.name}</p>
+                      <p className="text-text-tertiary text-xs font-mono">
+                        {String(session.openUTC).padStart(2, '0')}:00 – {String(session.closeUTC).padStart(2, '0')}:00 UTC
+                      </p>
+                    </div>
+                  </div>
+                  <span className={`badge text-xs ${isOpen ? 'badge-green' : 'badge-red'}`}>
+                    {isOpen ? 'Open' : 'Closed'}
+                  </span>
+                </div>
+              );
+            })}
           </div>
         </div>
       </div>

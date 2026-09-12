@@ -120,3 +120,8 @@ export const account = {
   reset: (newBalance?: number) => 
     api.post(`/api/v1/account/reset${newBalance ? `?new_balance=${newBalance}` : ''}`),
 };
+
+export const news = {
+  get: (category: string = 'forex', limit: number = 5) => 
+    api.get(`/api/v1/news?category=${category}&limit=${limit}`),
+};
