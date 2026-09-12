@@ -2,7 +2,8 @@ from fastapi import FastAPI, Query, HTTPException, Depends, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from datetime import datetime
 from pydantic import BaseModel, Field
-from database import create_bots_table, get_market_data
+from market_hours import MarketHours
+from database import create_bots_table, create_paper_accounts_table, get_market_data
 from market_data import get_or_fetch_market_data
 from strategies import analyze_symbol, get_strategy_signal
 from database import get_user_by_username, get_user_by_email, create_user,create_users_table
@@ -15,6 +16,7 @@ from auth import(
 )
 from fastapi.middleware.cors import CORSMiddleware
 from database import create_trading_tables, create_bots_table, create_users_table
+from mt_bridge import mt_bridge
 
 
 app = FastAPI(title="TradeForge Trading Engine", version="1.0.0")
@@ -32,14 +34,27 @@ app.add_middleware(
 create_users_table()
 create_trading_tables()
 create_bots_table()
+create_paper_accounts_table()
 
 # Start scheduler on app startup
 @app.on_event("startup")
 async def startup_event():
     """Start the bot scheduler on app startup."""
     import asyncio
+
+    # start the bot scheduler loop in the background
     asyncio.create_task(bot_scheduler.run_scheduler_loop())
     print("🤖 Bot scheduler ready.")
+
+    # Start MT bridge on app startup
+    asyncio.create_task(mt_bridge.start())
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Stop the bot scheduler and MT bridge on app shutdown."""
+    await bot_scheduler.stop_scheduler_loop()
+    print("🤖 Bot scheduler stopped.")
+    await mt_bridge.stop()
 
 
 
@@ -762,6 +777,11 @@ class OrderRequest(BaseModel):
     stop_loss: float = None
     take_profit: float = None
 
+@app.get("/api/v1/market-status")
+async def get_market_status():
+    """Get current market hours status."""
+    return MarketHours.get_status()
+
 
 @app.post("/api/v1/trade/order")
 async def place_order(
@@ -772,6 +792,12 @@ async def place_order(
 ):
     """Place Order."""
     try:
+        # Check if market is open
+        if not MarketHours.is_symbol_tradable(request.symbol):
+            status = MarketHours.get_status()
+            raise HTTPException(status_code=400, detail=f"Market for {request.symbol} is currently closed. {status['next_event']}")
+
+
         # Convert to float to be safe
         lot_size = float(request.lot_size)
         
@@ -1006,3 +1032,182 @@ async def cleanup_positions(
         "total": len(positions),
         "errors": errors if errors else None
     }
+
+# ============================================
+# DASHBOARD SUMMARY
+# ============================================
+
+@app.get("/api/v1/dashboard")
+async def get_dashboard(
+    current_user: dict = Depends(get_current_user_from_token)
+):
+    """Get all dashboard data in one call."""
+    from orders import OrderManager
+    from bot_scheduler import bot_scheduler
+    
+    try:
+        # Get positions
+        positions = OrderManager.get_positions(current_user['id'])
+        
+        # Get orders (last 50)
+        orders = OrderManager.get_orders(current_user['id'])
+        
+        # Get bots
+        bots = bot_scheduler.get_all_bots(current_user['id'])
+        
+        # Calculate metrics
+        total_pnl = sum(float(p['pnl'] or 0) for p in positions)
+        open_positions = len(positions)
+        active_bots = len([b for b in bots if b['status'] == 'RUNNING'])
+        
+        # Closed trades from recent orders (approximation)
+        closed_trades = [o for o in orders if o['status'] == 'FILLED']
+        total_trades = len(closed_trades)
+        
+        # Win rate: count FILLED orders with profit (approximation via positions)
+        # In the future we should track closed positions with P&L
+        winning = sum(1 for p in positions if float(p['pnl'] or 0) > 0)
+        win_rate = (winning / open_positions * 100) if open_positions > 0 else 0
+        
+        return {
+            "portfolio": {
+                "total_pnl": total_pnl,
+                "open_positions": open_positions,
+                "active_bots": active_bots,
+                "total_trades": total_trades,
+                "win_rate": win_rate,
+                "balance": 10000.0,  # placeholder until we track balance
+            },
+            "positions": positions[:5],  # top 5
+            "bots": bots,
+            "orders": orders[:5],  # last 5
+        }
+    
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+# ============================================
+# MARKET OVERVIEW
+# ============================================
+
+@app.get("/api/v1/market-overview")
+async def get_market_overview(
+    current_user: dict = Depends(get_current_user_from_token)
+):
+    """Get live market data + signals for key symbols."""
+    from market_data import get_or_fetch_market_data
+    from strategies import analyze_symbol
+    
+    symbols = ['EURUSD', 'GBPUSD', 'BTCUSD']
+    result = []
+    
+    for symbol in symbols:
+        try:
+            # Get latest price
+            data = get_or_fetch_market_data(symbol, "1h", 2)
+            
+            if not data or len(data) < 2:
+                continue
+            
+            latest = data[0]
+            previous = data[1]
+            
+            current_price = float(latest['close'])
+            previous_price = float(previous['close'])
+            
+            # Calculate change
+            change = current_price - previous_price
+            change_pct = (change / previous_price * 100) if previous_price else 0
+            
+            # Get signal
+            signal_data = analyze_symbol(symbol, "1h", 100)
+            
+            result.append({
+                "symbol": symbol,
+                "price": current_price,
+                "change": change,
+                "change_pct": change_pct,
+                "timestamp": latest['timestamp'],
+                "signal": {
+                    "action": signal_data.get('action', 'HOLD') if signal_data else 'HOLD',
+                    "confidence": signal_data.get('confidence', 0.0) if signal_data else 0.0,
+                    "reasons": signal_data.get('reasons', []) if signal_data else []
+                }
+            })
+        except Exception as e:
+            print(f"❌ Error for {symbol}: {e}")
+            continue
+    
+    return {"markets": result}
+
+# ============================================
+# MT5 BRIDGE
+# ============================================
+
+@app.get("/api/v1/mt-bridge/status")
+async def mt_bridge_status():
+    """Check MT5 bridge connection status."""
+    return {
+        "connected": mt_bridge.connected,
+        "clients": len(mt_bridge.clients),
+        "balance": mt_bridge.latest_balance,
+        "equity": mt_bridge.latest_equity,
+        "positions": len(mt_bridge.latest_positions),
+    }
+
+
+@app.get("/api/v1/mt-bridge/account")
+async def mt_bridge_account():
+    """Get live account info from MT5."""
+    result = await mt_bridge.get_account_info()
+    if not result:
+        raise HTTPException(503, "MT5 not connected")
+    return result
+
+
+@app.get("/api/v1/mt-bridge/positions")
+async def mt_bridge_positions():
+    """Get live positions from MT5."""
+    result = await mt_bridge.get_positions()
+    if not result:
+        raise HTTPException(503, "MT5 not connected")
+    return result
+
+# ============================================
+# PAPER ACCOUNT ENDPOINTS
+# ============================================
+
+from paper_account import PaperAccountManager
+
+
+@app.get("/api/v1/account")
+async def get_account(
+    current_user: dict = Depends(get_current_user_from_token)
+):
+    """Get the user's paper trading account."""
+    try:
+        account = PaperAccountManager.get_or_create(current_user['id'])
+        return account
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+
+@app.post("/api/v1/account/reset")
+async def reset_account(
+    new_balance: float = 10000.00,
+    current_user: dict = Depends(get_current_user_from_token)
+):
+    """Reset the paper account to a starting balance."""
+    try:
+        result = PaperAccountManager.reset(current_user['id'], new_balance)
+        return result
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+
+
+#============"_MAIN ENTRY BLOCK"=========================
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("main:app", host="127.0.0.1", port=8000)
+#=========================================================

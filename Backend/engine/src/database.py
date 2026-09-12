@@ -383,6 +383,35 @@ def create_bots_table():
         finally:
             cur.close()
 
+def create_paper_accounts_table():
+    """Create paper_accounts table if it doesn't exist."""
+    with db_connection() as conn:
+        cur = conn.cursor()
+        try:
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS paper_accounts (
+                    id SERIAL PRIMARY KEY,
+                    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE UNIQUE,
+                    account_number VARCHAR(50) UNIQUE NOT NULL,
+                    starting_balance DECIMAL(20,2) NOT NULL DEFAULT 10000.00,
+                    balance DECIMAL(20,2) NOT NULL DEFAULT 10000.00,
+                    equity DECIMAL(20,2) NOT NULL DEFAULT 10000.00,
+                    used_margin DECIMAL(20,2) DEFAULT 0,
+                    free_margin DECIMAL(20,2) DEFAULT 10000.00,
+                    total_trades INTEGER DEFAULT 0,
+                    winning_trades INTEGER DEFAULT 0,
+                    losing_trades INTEGER DEFAULT 0,
+                    largest_win DECIMAL(20,2) DEFAULT 0,
+                    largest_loss DECIMAL(20,2) DEFAULT 0,
+                    created_at TIMESTAMP DEFAULT NOW(),
+                    updated_at TIMESTAMP DEFAULT NOW()
+                )
+            """)
+            conn.commit()
+            print("✅ Paper accounts table created successfully")
+        finally:
+            cur.close()
+
 
 if __name__ == "__main__":
     create_users_table()

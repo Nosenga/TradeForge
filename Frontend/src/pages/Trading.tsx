@@ -10,9 +10,13 @@ import {
   Activity,
   X,
   RefreshCw,
-  Trash2
+  Trash2,
+  Wallet,
+  RotateCcw,
+  Award,
+  TrendingDown,
 } from 'lucide-react';
-import api, { trading, bots as botApi } from '../api/client';
+import api, { trading, bots as botApi, account as accountApi } from '../api/client';
 import { Skeleton, SkeletonStats, SkeletonBotRow, SkeletonTableRow } from '../components/Skeleton';
 
 interface Bot {
@@ -55,11 +59,30 @@ interface Order {
   created_at: string;
 }
 
+interface PaperAccount {
+  id: number;
+  user_id: number;
+  account_number: string;
+  starting_balance: number;
+  balance: number;
+  equity: number;
+  used_margin: number;
+  free_margin: number;
+  total_trades: number;
+  winning_trades: number;
+  losing_trades: number;
+  largest_win: number;
+  largest_loss: number;
+  created_at: string;
+  updated_at: string;
+}
+
 const Trading: React.FC = () => {
   const [bots, setBots] = useState<Bot[]>([]);
   const [positions, setPositions] = useState<Position[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [strategies, setStrategies] = useState<any[]>([]);
+  const [account, setAccount] = useState<PaperAccount | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
@@ -105,15 +128,17 @@ const Trading: React.FC = () => {
   const fetchData = useCallback(async (isManual = false) => {
     if (isManual) setRefreshing(true);
     try {
-      const [botsRes, positionsRes, ordersRes] = await Promise.all([
+      const [botsRes, positionsRes, ordersRes, accountRes] = await Promise.all([
         botApi.getAll(),
         trading.getPositions(),
-        trading.getOrders()
+        trading.getOrders(),
+        accountApi.get()
       ]);
       
       setBots(botsRes.data.bots || []);
       setPositions(positionsRes.data.positions || []);
       setOrders(ordersRes.data.orders || []);
+      setAccount(accountRes.data);
       setError('');
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Failed to load data');
@@ -265,6 +290,21 @@ const Trading: React.FC = () => {
     }
   };
 
+  const handleResetAccount = async () => {
+    if (!confirm('Reset your paper account? This will reset your balance to $10,000 and clear all trade statistics.')) return;
+    
+    setActionLoading('reset-account');
+    try {
+      await accountApi.reset(10000);
+      toast.success('Account reset to $10,000');
+      fetchData();
+    } catch (err: any) {
+      toast.error(err.response?.data?.detail || 'Failed to reset account');
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
   const handleManualRefresh = () => {
     fetchData(true);
   };
@@ -297,72 +337,66 @@ const Trading: React.FC = () => {
   }, [bots, positions, orders]);
 
   if (loading) {
-  return (
-    <div className="space-y-6">
-      {/* Header Skeleton */}
-      <div className="flex justify-between items-center">
-        <div className="space-y-2">
-          <Skeleton height="32px" width="150px" />
-          <Skeleton height="16px" width="280px" />
+    return (
+      <div className="space-y-6">
+        <div className="flex justify-between items-center">
+          <div className="space-y-2">
+            <Skeleton height="32px" width="150px" />
+            <Skeleton height="16px" width="280px" />
+          </div>
+          <div className="flex gap-3">
+            <Skeleton width="100px" height="40px" />
+            <Skeleton width="120px" height="40px" />
+          </div>
         </div>
-        <div className="flex gap-3">
-          <Skeleton width="100px" height="40px" />
-          <Skeleton width="120px" height="40px" />
+
+        <SkeletonStats count={4} />
+
+        <div className="glass p-6">
+          <Skeleton height="24px" width="140px" className="mb-4" />
+          <div className="space-y-3">
+            <SkeletonBotRow />
+            <SkeletonBotRow />
+          </div>
+        </div>
+
+        <div className="glass p-6">
+          <Skeleton height="24px" width="160px" className="mb-4" />
+          <table className="w-full">
+            <tbody>
+              <SkeletonTableRow columns={7} />
+              <SkeletonTableRow columns={7} />
+              <SkeletonTableRow columns={7} />
+            </tbody>
+          </table>
+        </div>
+
+        <div className="glass p-6">
+          <Skeleton height="24px" width="120px" className="mb-4" />
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+            {[1, 2, 3, 4, 5].map((i) => (
+              <div key={i} className="space-y-2">
+                <Skeleton height="12px" width="60%" />
+                <Skeleton height="40px" width="100%" />
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="glass p-6">
+          <Skeleton height="24px" width="140px" className="mb-4" />
+          <table className="w-full">
+            <tbody>
+              <SkeletonTableRow columns={6} />
+              <SkeletonTableRow columns={6} />
+              <SkeletonTableRow columns={6} />
+              <SkeletonTableRow columns={6} />
+            </tbody>
+          </table>
         </div>
       </div>
-
-      {/* Stats Skeleton */}
-      <SkeletonStats count={4} />
-
-      {/* Bots Skeleton */}
-      <div className="glass p-6">
-        <Skeleton height="24px" width="140px" className="mb-4" />
-        <div className="space-y-3">
-          <SkeletonBotRow />
-          <SkeletonBotRow />
-        </div>
-      </div>
-
-      {/* Positions Skeleton */}
-      <div className="glass p-6">
-        <Skeleton height="24px" width="160px" className="mb-4" />
-        <table className="w-full">
-          <tbody>
-            <SkeletonTableRow columns={7} />
-            <SkeletonTableRow columns={7} />
-            <SkeletonTableRow columns={7} />
-          </tbody>
-        </table>
-      </div>
-
-      {/* Manual Trade Skeleton */}
-      <div className="glass p-6">
-        <Skeleton height="24px" width="120px" className="mb-4" />
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-          {[1, 2, 3, 4, 5].map((i) => (
-            <div key={i} className="space-y-2">
-              <Skeleton height="12px" width="60%" />
-              <Skeleton height="40px" width="100%" />
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Orders Skeleton */}
-      <div className="glass p-6">
-        <Skeleton height="24px" width="140px" className="mb-4" />
-        <table className="w-full">
-          <tbody>
-            <SkeletonTableRow columns={6} />
-            <SkeletonTableRow columns={6} />
-            <SkeletonTableRow columns={6} />
-            <SkeletonTableRow columns={6} />
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-}
+    );
+  }
 
   return (
     <div className="space-y-6 content-fade-in">
@@ -403,6 +437,111 @@ const Trading: React.FC = () => {
         </div>
       )}
 
+      {/* Paper Account Overview */}
+      {account && (
+        <div className="glass p-6 border-trade-blue/30">
+          <div className="flex justify-between items-start mb-5">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-gradient-primary flex items-center justify-center">
+                <Wallet className="w-5 h-5 text-white" />
+              </div>
+              <div>
+                <h2 className="text-lg font-bold text-text-primary">Paper Account</h2>
+                <p className="text-text-tertiary text-xs font-mono">{account.account_number}</p>
+              </div>
+            </div>
+            <button
+              onClick={handleResetAccount}
+              disabled={actionLoading === 'reset-account'}
+              className="btn-ghost text-xs"
+            >
+              <RotateCcw className="w-3 h-3" />
+              {actionLoading === 'reset-account' ? 'Resetting...' : 'Reset'}
+            </button>
+          </div>
+
+          {/* Balance Row */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+            <div className="bg-trade-bg/50 rounded-lg p-4">
+              <p className="text-text-tertiary text-xs uppercase tracking-wider mb-1">Balance</p>
+              <p className="text-text-primary text-xl font-bold font-mono">
+                ${account.balance.toFixed(2)}
+              </p>
+              <p className="text-text-tertiary text-xs mt-1">
+                Started: ${account.starting_balance.toFixed(2)}
+              </p>
+            </div>
+
+            <div className="bg-trade-bg/50 rounded-lg p-4">
+              <p className="text-text-tertiary text-xs uppercase tracking-wider mb-1">Equity</p>
+              <p className={`text-xl font-bold font-mono ${
+                account.equity >= account.starting_balance ? 'text-trade-green' : 'text-trade-red'
+              }`}>
+                ${account.equity.toFixed(2)}
+              </p>
+              <p className={`text-xs mt-1 font-mono ${
+                account.equity - account.starting_balance >= 0 ? 'text-trade-green' : 'text-trade-red'
+              }`}>
+                {account.equity - account.starting_balance >= 0 ? '+' : ''}
+                ${(account.equity - account.starting_balance).toFixed(2)}
+              </p>
+            </div>
+
+            <div className="bg-trade-bg/50 rounded-lg p-4">
+              <p className="text-text-tertiary text-xs uppercase tracking-wider mb-1">Free Margin</p>
+              <p className="text-text-primary text-xl font-bold font-mono">
+                ${account.free_margin.toFixed(2)}
+              </p>
+              <p className="text-text-tertiary text-xs mt-1">
+                Used: ${account.used_margin.toFixed(2)}
+              </p>
+            </div>
+
+            <div className="bg-trade-bg/50 rounded-lg p-4">
+              <p className="text-text-tertiary text-xs uppercase tracking-wider mb-1">Win Rate</p>
+              <p className={`text-xl font-bold font-mono ${
+                account.total_trades === 0 ? 'text-text-tertiary' :
+                (account.winning_trades / account.total_trades) >= 0.5 ? 'text-trade-green' : 'text-trade-red'
+              }`}>
+                {account.total_trades === 0 ? '—' : 
+                  `${((account.winning_trades / account.total_trades) * 100).toFixed(0)}%`}
+              </p>
+              <p className="text-text-tertiary text-xs mt-1">
+                {account.winning_trades}W / {account.losing_trades}L
+              </p>
+            </div>
+          </div>
+
+          {/* Stats Row */}
+          {account.total_trades > 0 && (
+            <div className="grid grid-cols-3 gap-4 pt-4 border-t border-trade-border/50">
+              <div>
+                <p className="text-text-tertiary text-xs uppercase tracking-wider">Total Trades</p>
+                <p className="text-text-primary font-mono font-medium">{account.total_trades}</p>
+              </div>
+              <div>
+                <p className="text-text-tertiary text-xs uppercase tracking-wider flex items-center gap-1">
+                  <Award className="w-3 h-3 text-trade-green" />
+                  Largest Win
+                </p>
+                <p className="text-trade-green font-mono font-medium">
+                  +${account.largest_win.toFixed(2)}
+                </p>
+              </div>
+              <div>
+                <p className="text-text-tertiary text-xs uppercase tracking-wider flex items-center gap-1">
+                  <TrendingDown className="w-3 h-3 text-trade-red" />
+                  Largest Loss
+                </p>
+                <p className="text-trade-red font-mono font-medium">
+                  ${account.largest_loss.toFixed(2)}
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="glass glass-hover p-5">
@@ -422,7 +561,7 @@ const Trading: React.FC = () => {
         <div className="glass glass-hover p-5">
           <div className="flex items-center gap-2 text-text-tertiary text-xs mb-2">
             <DollarSign className="w-4 h-4" />
-            <span className="stat-label">Total P&L</span>
+            <span className="stat-label">Open P&L</span>
           </div>
           <p className={`stat-value ${stats.totalPnl >= 0 ? 'text-trade-green' : 'text-trade-red'}`}>
             {formatCurrency(stats.totalPnl)}
@@ -813,7 +952,7 @@ const Trading: React.FC = () => {
         </div>
       )}
 
-      {/* Delete Confirmation Modal — MOVED OUTSIDE the bot loop ✅ */}
+      {/* Delete Confirmation Modal */}
       {deleteConfirm !== null && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
           <div className="glass p-6 max-w-md w-full animate-slide-up">

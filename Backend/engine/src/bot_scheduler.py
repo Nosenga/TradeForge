@@ -9,8 +9,10 @@ from typing import Dict, Optional
 from database import db_connection
 from orders import OrderManager
 from strategies import analyze_symbol
+from paper_account import PaperAccountManager
+from market_hours import MarketHours
 
-
+#======================================================
 class TradingBot:
     """Represents a single trading bot instance."""
     
@@ -39,7 +41,7 @@ class TradingBot:
         self.status = "STOPPED"
         self.error = None
 
-
+#======================================================
 class BotScheduler:
     """Manages all trading bots."""
     
@@ -251,8 +253,13 @@ class BotScheduler:
 
         # Step 0: Manage open positions first
         await self._manage_open_positions(bot)
+
+        # Step 1.1: Check if market is open for this symbol
+        if not MarketHours.is_symbol_tradable(bot.symbol):
+            print(f"⚠️  Bot {bot.bot_id}: Market for {bot.symbol} is currently closed.")
+            return
         
-        # Step 1: Get current signal
+        # Step 1.2: Get current signal
         signal = analyze_symbol(bot.symbol, bot.timeframe, 100)
         
         if not signal or 'error' in signal:
@@ -439,6 +446,16 @@ class BotScheduler:
         
             except Exception as e:
                 print(f"❌ Error managing position {position['position_id']}: {e}")
+
+            try:
+                positions_after = OrderManager.get_positions(bot.user_id)
+                open_pnl = sum(float(p.get('pnl',0) or 0) for p in positions_after)
+
+                # Calculate used margin (simplified: $1000 per 0.01 lot)
+                used_margin = sum(float(p.get('lots', 0)) for p in positions_after)
+                PaperAccountManager.update_balance(bot.user_id, open_pnl, used_margin)
+            except Exception as e:
+                print(f"❌ Error updating paper account for bot {bot.bot_id}: {e}")
 
     
 

@@ -101,3 +101,22 @@ export const bots = {
   // Get all bots
   getAll: () => api.get('/api/v1/bots'),
 };
+
+// Dashboard endpoint
+export const dashboard = {
+  getSummary: () => api.get('/api/v1/dashboard'),
+};
+
+export const marketOverview = {
+  get: () => api.get('/api/v1/market-overview'),
+};
+
+export const marketStatus = {
+  get: () => api.get('/api/v1/market-status'),
+};
+
+export const account = {
+  get: () => api.get('/api/v1/account'),
+  reset: (newBalance?: number) => 
+    api.post(`/api/v1/account/reset${newBalance ? `?new_balance=${newBalance}` : ''}`),
+};

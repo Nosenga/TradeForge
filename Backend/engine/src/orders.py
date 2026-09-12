@@ -7,6 +7,7 @@ import uuid
 from datetime import datetime
 from typing import Optional, List, Dict
 from database import db_connection
+from paper_account import PaperAccountManager
 
 
 class Order:
@@ -55,7 +56,11 @@ class OrderManager:
         self.user_id = user_id
         self.orders: Dict[str, Order] = {}
         self.positions: Dict[str, Position] = {}
-        self.balance = 10000.0
+    
+        # ✅ Load real paper account balance
+        account = PaperAccountManager.get_or_create(user_id)
+        self.balance = account['balance']
+        self.account = account
     
     @staticmethod
     def save_order(order: Order):
@@ -305,44 +310,69 @@ class OrderManager:
 
     @staticmethod
     def close_position(position_id: str, exit_price: float, reason: str = "manual") -> bool:
-        """Close a position and record final P&L."""
+        """Close a position, credit P&L to paper account, and record."""
         with db_connection() as conn:
             cur = conn.cursor()
             try:
                 # Get position details
                 cur.execute("""
-                    SELECT action, entry_price, lots 
+                    SELECT user_id, action, entry_price, lots 
                     FROM positions WHERE position_id = %s AND status = 'OPEN'
                 """, (position_id,))
                 row = cur.fetchone()
-                
+            
                 if not row:
                     print(f"❌ Position {position_id} not found or already closed")
                     return False
-                
-                action, entry_price, lots = row
+            
+                user_id, action, entry_price, lots = row
+                user_id = int(user_id)
                 entry_price = float(entry_price)
                 lots = float(lots)
-                
+                exit_price = float(exit_price)
+            
                 # Calculate final P&L
                 if action == "BUY":
                     pnl = (exit_price - entry_price) * lots * 100000
                 else:
                     pnl = (entry_price - exit_price) * lots * 100000
-                
+            
                 # Update position — mark as CLOSED
                 cur.execute("""
                     UPDATE positions 
                     SET current_price = %s, pnl = %s, close_time = NOW(), status = 'CLOSED'
                     WHERE position_id = %s
                 """, (exit_price, pnl, position_id))
-                
+            
                 conn.commit()
                 print(f"✅ Closed {position_id}: P&L = ${pnl:.2f} ({reason})")
-                return True
             except Exception as e:
                 print(f"❌ Error closing position: {e}")
                 conn.rollback()
                 return False
             finally:
                 cur.close()
+    
+    # ✅ Credit P&L to paper account (outside the DB lock)
+        PaperAccountManager.update_balance(user_id, pnl)
+    
+        return True
+
+    def calculate_position_size(self, risk_percent: float = 1.0, stop_loss_pips: int = 50) -> float:
+        """Calculate lot size based on account balance and risk %."""
+        account = PaperAccountManager.get_or_create(self.user_id)
+        balance = account['balance']
+    
+        # Risk amount in $ (e.g., $100 if balance=$10,000 and risk=1%)
+        risk_amount = balance * (risk_percent / 100.0)
+    
+        # For standard lot, 1 pip = $10. For 0.01 lot, 1 pip = $0.10
+        # So risk per lot = stop_loss_pips * $10
+        # Lots = risk_amount / (stop_loss_pips * 10)
+        if stop_loss_pips <= 0:
+            return 0.01  # Minimum
+    
+        lots = risk_amount / (stop_loss_pips * 10)
+    
+        # Round to 2 decimals, min 0.01
+        return max(0.01, round(lots, 2))

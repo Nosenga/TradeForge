@@ -5,7 +5,7 @@ BASE_URL = "http://localhost:8000"
 # 1. Login
 login = requests.post(
     f"{BASE_URL}/api/v1/auth/login",
-    json={"username": "trader2", "password": "secure123"}
+    json={"username": "Godz", "password": "free2004"}
 )
 token = login.json()["access_token"]
 print(f"✅ Token: {token[:30]}...")
