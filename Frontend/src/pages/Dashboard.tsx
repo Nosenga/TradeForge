@@ -175,9 +175,9 @@ const Dashboard: React.FC = () => {
   return (
     <div className="space-y-6 content-fade-in">
       {/* Header */}
-      <div className="flex justify-between items-end">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4">
         <div>
-          <h1 className="text-4xl font-bold text-text-primary mb-2">
+          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-text-primary mb-2">
             Welcome, <span className="gradient-text">{user?.username}</span>
           </h1>
           <p className="text-text-secondary">
@@ -211,7 +211,7 @@ const Dashboard: React.FC = () => {
       </div>
 
       {/* PORTFOLIO OVERVIEW */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="glass glass-hover p-5">
           <div className="flex items-center gap-2 text-text-tertiary text-xs mb-2">
             <DollarSign className="w-4 h-4" />
@@ -266,7 +266,7 @@ const Dashboard: React.FC = () => {
             Loading market data...
           </p>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {marketData.map((market) => {
               const isUp = market.change >= 0;
               const signalStyles = 

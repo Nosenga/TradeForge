@@ -110,8 +110,46 @@ def save_market_data(symbol, timeframe, df):
     inserted = insert_market_data(symbol, timeframe, df)
     print(f"✅ Inserted {inserted} rows for {symbol} ({timeframe})")
 
+TIMEFRAME_SECONDS = {
+    "1h": 3600,
+    "4h": 4 * 3600,
+    "1d": 24 * 3600,
+    "1w": 7 * 24 * 3600,
+}
+
+
+def _is_data_fresh(db_data, timeframe):
+    """Check whether the most recent cached candle is recent enough that
+    we don't need to hit the API again.
+
+    FIX: the old check only looked at row COUNT (`len(db_data) >= limit`),
+    so once 100 candles existed for a symbol, this function would serve
+    those same 100 candles forever and never refetch -- meaning bots could
+    trade on arbitrarily stale prices. Now we also check the age of the
+    latest candle against the timeframe's own bar length (with a little
+    slack for API/processing lag).
+    """
+    if not db_data:
+        return False
+
+    latest_ts = pd.to_datetime(db_data[0]['timestamp'])
+    if latest_ts.tzinfo is not None:
+        now = pd.Timestamp.now(tz=latest_ts.tzinfo)
+    else:
+        now = pd.Timestamp.now(tz="UTC").tz_localize(None)
+
+    bar_seconds = TIMEFRAME_SECONDS.get(timeframe, 3600)
+    # Allow up to 1.5x the bar length before considering data stale, so we
+    # don't refetch on every call right as a new bar is about to close.
+    max_age_seconds = bar_seconds * 1.5
+
+    age_seconds = (now - latest_ts).total_seconds()
+    return age_seconds <= max_age_seconds
+
+
 def get_or_fetch_market_data(symbol, timeframe="1h", limit=100):
-    """Get from DB or fetch from API if not enough data."""
+    """Get from DB or fetch from API if not enough data, or if what we
+    have is stale."""
 
     # ✅ This part is good
     if timeframe == "1d":
@@ -122,12 +160,13 @@ def get_or_fetch_market_data(symbol, timeframe="1h", limit=100):
 
     # Try to get from database first
     db_data = get_market_data(symbol, timeframe, limit)
-    
-    # If database has enough data, return it
-    if db_data and len(db_data) >= limit:
-        print(f"✅ Found {len(db_data)} records in database for {symbol} ({timeframe})")
+
+    # Only serve from cache if we have enough rows AND the latest one is
+    # still fresh relative to this timeframe.
+    if db_data and len(db_data) >= limit and _is_data_fresh(db_data, timeframe):
+        print(f"✅ Found {len(db_data)} fresh records in database for {symbol} ({timeframe})")
         return db_data
-    
+
     # ✅ FIX: Use api_limit here, not limit
     print(f"🔄 Fetching {api_limit} candles from API for {symbol} ({timeframe})...")
     df = fetch_ohlcv(symbol, timeframe, api_limit)  # ✅ Use api_limit
@@ -148,9 +187,6 @@ def get_or_fetch_market_data(symbol, timeframe="1h", limit=100):
         })
     
     return data
-
-    
-
 
 
 if __name__ == "__main__":

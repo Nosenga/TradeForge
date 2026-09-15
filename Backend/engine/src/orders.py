@@ -248,45 +248,51 @@ class OrderManager:
     @staticmethod
     def update_position(position_id: str, current_price: float):
         """Update position with current price and calculate PnL."""
+        # FIX: the try/except/finally that uses `cur`/`conn` now lives
+        # INSIDE the `with db_connection()` block. Previously only
+        # `cur = conn.cursor()` was inside the `with`, so the connection
+        # was returned to the pool before it was actually queried --
+        # under concurrent bot ticks that meant two requests could end up
+        # sharing the same pooled connection mid-query.
         with db_connection() as conn:
             cur = conn.cursor()
-        try:
-            # Get position details
-            cur.execute("""
-                SELECT action, entry_price, lots 
-                FROM positions WHERE position_id = %s
-            """, (position_id,))
-            row = cur.fetchone()
-            
-            if not row:
-                print(f"❌ Position {position_id} not found")
+            try:
+                # Get position details
+                cur.execute("""
+                    SELECT action, entry_price, lots 
+                    FROM positions WHERE position_id = %s
+                """, (position_id,))
+                row = cur.fetchone()
+
+                if not row:
+                    print(f"❌ Position {position_id} not found")
+                    return False
+
+                # ✅ Convert DECIMAL → float
+                action = row[0]
+                entry_price = float(row[1])
+                lots = float(row[2])
+                current_price = float(current_price)
+
+                # Calculate PnL
+                if action == "BUY":
+                    pnl = (current_price - entry_price) * lots * 100000
+                else:
+                    pnl = (entry_price - current_price) * lots * 100000
+
+                cur.execute("""
+                    UPDATE positions 
+                    SET current_price = %s, pnl = %s 
+                    WHERE position_id = %s
+                """, (current_price, pnl, position_id))
+                conn.commit()
+                return True
+            except Exception as e:
+                print(f"❌ Error updating position: {e}")
+                conn.rollback()
                 return False
-            
-            # ✅ Convert DECIMAL → float
-            action = row[0]
-            entry_price = float(row[1])
-            lots = float(row[2])
-            current_price = float(current_price)
-            
-            # Calculate PnL
-            if action == "BUY":
-                pnl = (current_price - entry_price) * lots * 100000
-            else:
-                pnl = (entry_price - current_price) * lots * 100000
-            
-            cur.execute("""
-                UPDATE positions 
-                SET current_price = %s, pnl = %s 
-                WHERE position_id = %s
-            """, (current_price, pnl, position_id))
-            conn.commit()
-            return True
-        except Exception as e:
-            print(f"❌ Error updating position: {e}")
-            conn.rollback()
-            return False
-        finally:
-            cur.close()
+            finally:
+                cur.close()
 
     @staticmethod
     def update_order_status(order_id: str, status: str, filled_at: str = None, filled_price: float = None):
@@ -310,7 +316,15 @@ class OrderManager:
 
     @staticmethod
     def close_position(position_id: str, exit_price: float, reason: str = "manual") -> bool:
-        """Close a position, credit P&L to paper account, and record."""
+        """Close a position, credit P&L to paper account, and record.
+
+        Note: crediting the paper account happens AFTER the `with
+        db_connection()` block closes (releasing the connection back to
+        the pool first), since it's a separate DB call of its own.
+        """
+        user_id = None
+        pnl = None
+
         with db_connection() as conn:
             cur = conn.cursor()
             try:
@@ -320,30 +334,30 @@ class OrderManager:
                     FROM positions WHERE position_id = %s AND status = 'OPEN'
                 """, (position_id,))
                 row = cur.fetchone()
-            
+
                 if not row:
                     print(f"❌ Position {position_id} not found or already closed")
                     return False
-            
+
                 user_id, action, entry_price, lots = row
                 user_id = int(user_id)
                 entry_price = float(entry_price)
                 lots = float(lots)
                 exit_price = float(exit_price)
-            
+
                 # Calculate final P&L
                 if action == "BUY":
                     pnl = (exit_price - entry_price) * lots * 100000
                 else:
                     pnl = (entry_price - exit_price) * lots * 100000
-            
+
                 # Update position — mark as CLOSED
                 cur.execute("""
                     UPDATE positions 
                     SET current_price = %s, pnl = %s, close_time = NOW(), status = 'CLOSED'
                     WHERE position_id = %s
                 """, (exit_price, pnl, position_id))
-            
+
                 conn.commit()
                 print(f"✅ Closed {position_id}: P&L = ${pnl:.2f} ({reason})")
             except Exception as e:
@@ -352,10 +366,11 @@ class OrderManager:
                 return False
             finally:
                 cur.close()
-    
-    # ✅ Credit P&L to paper account (outside the DB lock)
+
+        # Credit P&L to the paper account -- only reached if the block
+        # above committed successfully (every early-return above returns
+        # False first).
         PaperAccountManager.update_balance(user_id, pnl)
-    
         return True
 
     def calculate_position_size(self, risk_percent: float = 1.0, stop_loss_pips: int = 50) -> float:

@@ -118,7 +118,7 @@ const Backtest: React.FC = () => {
       {/* Configuration */}
       <div className="bg-trade-card rounded-xl p-6 border border-trade-border">
         <h2 className="text-white font-semibold mb-4">Configuration</h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           <div>
             <label className="block text-gray-400 text-sm mb-1">Strategy</label>
             <select
@@ -202,7 +202,7 @@ const Backtest: React.FC = () => {
       {/* Results */}
       {result && (
         <div className="space-y-6">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             <div className="bg-trade-card rounded-xl p-4 border border-trade-border">
               <p className="text-gray-400 text-sm">Final Balance</p>
               <p className={`text-2xl font-bold ${result.total_return >= 0 ? 'text-green-500' : 'text-red-500'}`}>

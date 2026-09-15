@@ -443,21 +443,30 @@ class BotScheduler:
                         reason=close_reason
                     )
                     print(f"💰 Bot {bot.bot_id}: Closed {position['symbol']} — {close_reason}")
-        
+
             except Exception as e:
                 print(f"❌ Error managing position {position['position_id']}: {e}")
 
-            try:
-                positions_after = OrderManager.get_positions(bot.user_id)
-                open_pnl = sum(float(p.get('pnl',0) or 0) for p in positions_after)
+        # Update equity/margin ONCE per bot tick, after all positions have
+        # been processed -- not once per position, and using update_equity
+        # (which accepts open_pnl + used_margin), not update_balance (which
+        # only takes a single realized pnl and was being called with the
+        # wrong number of arguments here).
+        try:
+            positions_after = OrderManager.get_positions(bot.user_id)
+            open_pnl = sum(float(p.get('pnl', 0) or 0) for p in positions_after)
 
-                # Calculate used margin (simplified: $1000 per 0.01 lot)
-                used_margin = sum(float(p.get('lots', 0)) for p in positions_after)
-                PaperAccountManager.update_balance(bot.user_id, open_pnl, used_margin)
-            except Exception as e:
-                print(f"❌ Error updating paper account for bot {bot.bot_id}: {e}")
-
-    
+            # Calculate used margin: $1000 per 0.01 lot (simplified, flat
+            # rate -- doesn't yet vary by symbol or account leverage).
+            # $1000 per 0.01 lot means $100,000 per 1.0 (standard) lot,
+            # so: margin = lots * (1000 / 0.01) = lots * 100_000.
+            # The previous version summed raw lot sizes with no
+            # multiplier at all, understating margin by 100,000x.
+            MARGIN_PER_STANDARD_LOT = 1000 / 0.01  # = 100,000
+            used_margin = sum(float(p.get('lots', 0)) for p in positions_after) * MARGIN_PER_STANDARD_LOT
+            PaperAccountManager.update_equity(bot.user_id, open_pnl, used_margin)
+        except Exception as e:
+            print(f"❌ Error updating paper account for bot {bot.bot_id}: {e}")
 
 
 # Global scheduler instance

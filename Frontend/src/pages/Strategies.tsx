@@ -167,7 +167,7 @@ const Strategies: React.FC = () => {
       </div>
 
       {/* Stats Summary */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-trade-card rounded-xl p-4 border border-trade-border">
           <p className="text-gray-400 text-sm">Total Strategies</p>
           <p className="text-white text-2xl font-bold">{strategies.length}</p>

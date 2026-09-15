@@ -339,7 +339,7 @@ const Trading: React.FC = () => {
   if (loading) {
     return (
       <div className="space-y-6">
-        <div className="flex justify-between items-center">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div className="space-y-2">
             <Skeleton height="32px" width="150px" />
             <Skeleton height="16px" width="280px" />
@@ -373,7 +373,7 @@ const Trading: React.FC = () => {
 
         <div className="glass p-6">
           <Skeleton height="24px" width="120px" className="mb-4" />
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
             {[1, 2, 3, 4, 5].map((i) => (
               <div key={i} className="space-y-2">
                 <Skeleton height="12px" width="60%" />
@@ -401,9 +401,9 @@ const Trading: React.FC = () => {
   return (
     <div className="space-y-6 content-fade-in">
       {/* Header */}
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-text-primary">Trading</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold text-text-primary">Trading</h1>
           <p className="text-text-secondary text-sm mt-1">
             Manage bots and execute trades
           </p>
@@ -440,7 +440,7 @@ const Trading: React.FC = () => {
       {/* Paper Account Overview */}
       {account && (
         <div className="glass p-6 border-trade-blue/30">
-          <div className="flex justify-between items-start mb-5">
+          <div className="flex flex-col sm:flex-row justify-between items-start gap-4 mb-5">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-gradient-primary flex items-center justify-center">
                 <Wallet className="w-5 h-5 text-white" />
@@ -461,7 +461,7 @@ const Trading: React.FC = () => {
           </div>
 
           {/* Balance Row */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
             <div className="bg-trade-bg/50 rounded-lg p-4">
               <p className="text-text-tertiary text-xs uppercase tracking-wider mb-1">Balance</p>
               <p className="text-text-primary text-xl font-bold font-mono">
@@ -543,7 +543,7 @@ const Trading: React.FC = () => {
       )}
 
       {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="glass glass-hover p-5">
           <div className="flex items-center gap-2 text-text-tertiary text-xs mb-2">
             <BotIcon className="w-4 h-4" />
@@ -591,7 +591,7 @@ const Trading: React.FC = () => {
           <div className="space-y-3">
             {bots.map((bot) => (
               <div key={bot.bot_id} className="bg-trade-bg/50 rounded-lg p-4 border border-trade-border">
-                <div className="flex justify-between items-center">
+                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
                   <div className="flex items-center gap-4">
                     <div className={`w-2 h-2 rounded-full ${
                       bot.status === 'RUNNING' ? 'bg-trade-green shadow-glow-green' : 'bg-text-tertiary'
@@ -608,7 +608,7 @@ const Trading: React.FC = () => {
                       {bot.status}
                     </span>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 sm:justify-end">
                     {bot.status === 'RUNNING' ? (
                       <button
                         onClick={() => handleStopBot(bot.bot_id)}
@@ -714,7 +714,7 @@ const Trading: React.FC = () => {
       {/* Manual Trade */}
       <div className="glass p-6">
         <h2 className="text-lg font-bold text-text-primary mb-4">Manual Trade</h2>
-        <form onSubmit={handlePlaceOrder} className="grid grid-cols-1 md:grid-cols-5 gap-4">
+        <form onSubmit={handlePlaceOrder} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
           <div>
             <label className="block text-text-tertiary text-xs mb-1.5 uppercase tracking-wider">Symbol</label>
             <select
@@ -833,7 +833,7 @@ const Trading: React.FC = () => {
       {/* Create Bot Modal */}
       {showCreateBot && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
-          <div className="glass p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto animate-slide-up">
+          <div className="glass p-4 sm:p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto animate-slide-up">
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-xl font-bold text-text-primary">Create New Bot</h2>
               <button onClick={() => setShowCreateBot(false)} className="text-text-tertiary hover:text-text-primary transition">
@@ -842,7 +842,7 @@ const Trading: React.FC = () => {
             </div>
             
             <form onSubmit={handleCreateBot} className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-text-tertiary text-xs mb-1.5 uppercase tracking-wider">Strategy</label>
                   <select
