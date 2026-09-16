@@ -6,6 +6,7 @@ Connects signals to market data and stores strategies in database
 import pandas as pd
 from database import get_market_data
 from signals import get_signal_for_symbol, generate_combined_signal
+from market_data import get_or_fetch_market_data
 
 
 def analyze_symbol(symbol, timeframe="1h", limit=100):
@@ -21,7 +22,7 @@ def analyze_symbol(symbol, timeframe="1h", limit=100):
         dict with signal, price, and indicators
     """
     # Fetch market data from database
-    data = get_market_data(symbol, timeframe, limit)
+    data = get_or_fetch_market_data(symbol, timeframe, limit)
     
     if not data or len(data) < 20:
         return {
