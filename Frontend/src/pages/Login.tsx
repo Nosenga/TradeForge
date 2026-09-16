@@ -2,6 +2,9 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
+import Logo from '../components/Logo';
+import MarketBackdrop from '../components/MarketBackdrop';
+
 
 const Login: React.FC = () => {
   const [username, setUsername] = useState('');
@@ -27,12 +30,14 @@ const Login: React.FC = () => {
   };
 
   return (
+    <>
+    <MarketBackdrop variant="live" />
     <div className="min-h-screen flex items-center justify-center p-4">
       <div className="w-full max-w-md animate-slide-up">
         {/* Logo */}
         <div className="text-center mb-8">
-          <div className="w-16 h-16 rounded-2xl bg-gradient-primary flex items-center justify-center font-bold text-white text-2xl mx-auto mb-4 shadow-glow-blue">
-            T
+          <div className="flex justify-center mb-4">
+            <Logo size="lg" />
           </div>
           <h1 className="text-3xl font-bold text-text-primary mb-2">Welcome back</h1>
           <p className="text-text-secondary">Sign in to your TradeForge account</p>
@@ -93,6 +98,7 @@ const Login: React.FC = () => {
         </div>
       </div>
     </div>
+    </>
   );
 };
 

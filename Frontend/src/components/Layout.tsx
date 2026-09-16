@@ -12,6 +12,9 @@ import {
   Menu, 
   X 
 } from 'lucide-react';
+import Footer from './Footer';
+import Logo from './Logo';
+import MarketBackdrop from './MarketBackdrop';
 
 const Layout: React.FC = () => {
   const { user, logout, isAuthenticated } = useAuth();
@@ -39,19 +42,15 @@ const Layout: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-trade-bg">
+      <MarketBackdrop variant="ambient" />
       {/* Navbar */}
       <nav className="sticky top-0 z-50 border-b border-trade-border/50 backdrop-blur-xl bg-trade-bg/80">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4">
           <div className="flex justify-between items-center">
             {/* Logo + Desktop Nav */}
             <div className="flex items-center gap-4 lg:gap-8">
-              <Link to="/" className="flex items-center gap-2 sm:gap-3 group">
-                <div className="w-9 h-9 rounded-xl bg-gradient-primary flex items-center justify-center font-bold text-white text-lg shadow-glow-blue">
-                  T
-                </div>
-                <span className="text-lg font-bold text-text-primary tracking-tight">
-                  TradeForge
-                </span>
+              <Link to="/" className="flex items-center">
+                <Logo size="md" />
               </Link>
 
               {isAuthenticated && (
@@ -169,6 +168,9 @@ const Layout: React.FC = () => {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8 animate-fade-in">
         <Outlet />
       </main>
+
+      {/* ✅ Footer */}
+      <Footer />
     </div>
   );
 };
