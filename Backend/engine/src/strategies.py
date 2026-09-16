@@ -4,7 +4,6 @@ Connects signals to market data and stores strategies in database
 """
 
 import pandas as pd
-from database import get_market_data
 from signals import get_signal_for_symbol, generate_combined_signal, run_strategy
 from market_data import get_or_fetch_market_data
 

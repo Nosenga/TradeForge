@@ -460,13 +460,13 @@ async def get_strategies():
         {
             "id": 4,
             "name": "SMA Crossover (20/50)",
-            "description": "Buy when 50-day SMA crosses above 200-day SMA, sell when it crosses below.",
-            "timeframe": "1d",
+            "description": "Buy when SMA(20) crosses above SMA(50), sell when it crosses below.",
+            "timeframe": "1h",
             "win_rate": 65.2,
             "total_trades": 45,
             "profit_factor": 1.78,
             "is_active": True,
-            "indicators": ["SMA(50)", "SMA(200)"]
+            "indicators": ["SMA(20)", "SMA(50)"]
         }
     ]
 

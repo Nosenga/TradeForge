@@ -45,8 +45,9 @@ def calculate_rsi(data, window=14):
     delta = data.diff()
     gain = (delta.where(delta > 0, 0)).rolling(window=window).mean()
     loss = (-delta.where(delta < 0, 0)).rolling(window=window).mean()
-    rs = gain / loss
+    rs = gain / loss.replace(0, pd.NA)
     rsi = 100 - (100 / (1 + rs))
+    rsi = rsi.where(loss !=0, 100.0)
     return rsi
 
 # ============================================

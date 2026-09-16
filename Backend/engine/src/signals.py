@@ -253,6 +253,15 @@ def rsi_strategy(df):
     
     current_rsi = rsi.iloc[-1]
     previous_rsi = rsi.iloc[-2]
+
+    # ✅ NaN check on the ACTUAL values being used
+    if pd.isna(current_rsi) or pd.isna(previous_rsi):
+        return {
+            "action": "HOLD",
+            "confidence": 0.0,
+            "reasons": ["RSI unavailable this bar"],
+            "strategy": "RSI Oversold/Overbought"
+        }
     
     # Crossing BELOW 30 → BUY
     if previous_rsi >= 30 and current_rsi < 30:
@@ -389,7 +398,8 @@ def sma_crossover_strategy(df):
     """
     Strategy 4: SMA Crossover.
     
-    Uses SMA(20) vs SMA(50) since Twelve Data free tier caps at 100 candles.
+    Uses SMA(20) vs SMA(50) because Twelve Data's free tier caps at 100
+    candles per request, making SMA(200) impossible to compute.
     
     Fires only on CROSSING events:
     - BUY  when SMA(20) crosses ABOVE SMA(50) — short-term bullish
@@ -411,6 +421,15 @@ def sma_crossover_strategy(df):
     curr_50 = sma_50.iloc[-1]
     prev_20 = sma_20.iloc[-2]
     prev_50 = sma_50.iloc[-2]
+    
+    # NaN check on actual values
+    if pd.isna(curr_20) or pd.isna(curr_50) or pd.isna(prev_20) or pd.isna(prev_50):
+        return {
+            "action": "HOLD",
+            "confidence": 0.0,
+            "reasons": ["SMA values unavailable this bar"],
+            "strategy": "SMA Crossover (20/50)"
+        }
     
     # SMA(20) crossed ABOVE SMA(50) → BUY
     if prev_20 <= prev_50 and curr_20 > curr_50:
@@ -466,35 +485,13 @@ def run_strategy(strategy_id, df):
     strategy_func = STRATEGY_MAP.get(strategy_id)
     
     if strategy_func is None:
-        # Unknown strategy — fall back to voting
-        print(f"⚠️  Unknown strategy_id {strategy_id}, using default voting")
-        return generate_combined_signal(df)
+        return {
+            "action": "HOLD",
+            "confidence": 0.0,
+            "reasons": [f"Unknown strategy_id {strategy_id}"],
+            "strategy": "Unknown"
+        }
     
     return strategy_func(df)
     
-    # Generate combined signal
-    signal = generate_combined_signal(df)
-    
-    print("\n📈 COMBINED SIGNAL:")
-    print(f"   Action: {signal['action']}")
-    print(f"   Confidence: {signal['confidence'] * 100:.1f}%")
-    print(f"   Buy Score: {signal['buy_score']:.2f}")
-    print(f"   Sell Score: {signal['sell_score']:.2f}")
-    print("\n   Reasons:")
-    for reason in signal['reasons']:
-        print(f"   - {reason}")
-    
-    print("\n📊 Individual Signals:")
-    for key, val in signal['individual_signals'].items():
-        print(f"   {key.upper()}: {val['action']} ({val['confidence']*100:.1f}%) - {val['reason']}")
-    
-    # Test get_signal_for_symbol
-    print("\n" + "=" * 60)
-    print("TESTING get_signal_for_symbol()")
-    print("=" * 60)
-    
-    result = get_signal_for_symbol("EURUSD", df)
-    print(f"Symbol: {result['symbol']}")
-    print(f"Action: {result['action']}")
-    print(f"Confidence: {result['confidence']*100:.1f}%")
-    print(f"Price: {result['price']}")
+   

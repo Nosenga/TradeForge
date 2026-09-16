@@ -94,42 +94,16 @@ def fetch_ohlcv(symbol, interval="1h", outputsize=100):
         raise Exception(f"Error processing data: {e}")
 
 def save_market_data(symbol, timeframe, df):
-    """Save DataFrame to database, clearing stale rows first.
+    """Save DataFrame to database.
     
-    Why: previously we only INSERTed new rows with ON CONFLICT DO NOTHING,
-    which left large gaps if a symbol hadn't been fetched in a while
-    (e.g. 20 days). Indicators like SMA(200) then computed on
-    non-continuous data. Now we delete anything older than the oldest
-    row we're about to insert, then insert.
+    Relies on insert_market_data's ON CONFLICT DO NOTHING to handle
+    overlapping candles safely. No deletion -- historical data must
+    persist across fetches for backtesting.
     """
-    from database import db_connection
-    import pandas as pd
-
     if df is None or len(df) == 0:
         print(f"⚠️  No data to save for {symbol} ({timeframe})")
         return
-
-    # Get the oldest timestamp in the batch we're about to insert
-    oldest_ts = df['timestamp'].min()
-
-    # Delete stale rows that would sit BEFORE this batch
-    with db_connection() as conn:
-        cur = conn.cursor()
-        try:
-            cur.execute("""
-                DELETE FROM market_data
-                WHERE symbol = %s
-                  AND timeframe = %s
-                  AND timestamp < %s
-            """, (symbol, timeframe, oldest_ts))
-            deleted = cur.rowcount
-            conn.commit()
-            if deleted > 0:
-                print(f"🧹 Cleared {deleted} stale rows for {symbol} ({timeframe})")
-        finally:
-            cur.close()
-
-    # Insert the fresh batch
+    
     inserted = insert_market_data(symbol, timeframe, df)
     print(f"✅ Inserted {inserted} rows for {symbol} ({timeframe})")
 
