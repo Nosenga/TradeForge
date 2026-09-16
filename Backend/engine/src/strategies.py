@@ -5,11 +5,11 @@ Connects signals to market data and stores strategies in database
 
 import pandas as pd
 from database import get_market_data
-from signals import get_signal_for_symbol, generate_combined_signal
+from signals import get_signal_for_symbol, generate_combined_signal, run_strategy
 from market_data import get_or_fetch_market_data
 
 
-def analyze_symbol(symbol, timeframe="1h", limit=100):
+def analyze_symbol(symbol, timeframe="1h", limit=100, strategy_id=1):
     """
     Analyze a symbol and generate a trading signal.
     
@@ -37,9 +37,22 @@ def analyze_symbol(symbol, timeframe="1h", limit=100):
     df.sort_index(inplace=True)
     
     # Generate signal
-    signal = get_signal_for_symbol(symbol, df)
+    signal = run_strategy(strategy_id, df)
     
-    return signal
+    # Add market data to response
+    latest_price = float(df.iloc[-1]['close'])
+    latest_timestamp = df.index[-1].isoformat()
+
+    return {
+        "symbol":symbol,
+        "timestamp": latest_timestamp,
+        "price": latest_price,
+        "action": signal['action'],
+        "confidence": signal['confidence'],
+        "reasons": signal['reasons'],
+        "strategy": signal.get('strategy', 'Unknown'),
+        "strategy_id": strategy_id
+    }
 
 
 def get_strategy_signal(strategy_id, symbol, timeframe="1h", limit=100):
@@ -49,7 +62,7 @@ def get_strategy_signal(strategy_id, symbol, timeframe="1h", limit=100):
     """
     # Currently using default strategy
     # Later this will load custom strategies from database
-    return analyze_symbol(symbol, timeframe, limit)
+    return analyze_symbol(symbol, timeframe, limit, strategy_id=strategy_id)
 
 
 # ============================================

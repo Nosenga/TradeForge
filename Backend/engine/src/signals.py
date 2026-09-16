@@ -227,6 +227,191 @@ if __name__ == "__main__":
     }, index=dates)
     
     print("\n📊 Latest Price:", df.iloc[-1]['close'])
+
+# ============================================
+# STRATEGY FUNCTIONS (Single-Indicator)
+# ============================================
+
+def rsi_strategy(df):
+    """
+    Strategy 1: RSI Oversold/Overbought.
+    
+    BUY when RSI < 30 (oversold)
+    SELL when RSI > 70 (overbought)
+    HOLD otherwise
+    """
+    rsi = calculate_rsi(df['close'])
+    latest_rsi = rsi.iloc[-1]
+    
+    if latest_rsi < 30:
+        return {
+            "action": "BUY",
+            "confidence": 0.8,
+            "reasons": [f"RSI oversold ({latest_rsi:.1f})"],
+            "strategy": "RSI Oversold/Overbought"
+        }
+    elif latest_rsi > 70:
+        return {
+            "action": "SELL",
+            "confidence": 0.8,
+            "reasons": [f"RSI overbought ({latest_rsi:.1f})"],
+            "strategy": "RSI Oversold/Overbought"
+        }
+    else:
+        return {
+            "action": "HOLD",
+            "confidence": 0.0,
+            "reasons": [f"RSI neutral ({latest_rsi:.1f})"],
+            "strategy": "RSI Oversold/Overbought"
+        }
+
+
+def macd_strategy(df):
+    """
+    Strategy 2: MACD Crossover.
+    
+    BUY when MACD crosses above signal line
+    SELL when MACD crosses below signal line
+    HOLD otherwise
+    """
+    macd, signal, hist = calculate_macd(df['close'])
+    
+    current_macd = macd.iloc[-1]
+    current_signal = signal.iloc[-1]
+    
+    if current_macd > current_signal:
+        return {
+            "action": "BUY",
+            "confidence": 0.7,
+            "reasons": [f"MACD ({current_macd:.4f}) above signal ({current_signal:.4f})"],
+            "strategy": "MACD Crossover"
+        }
+    elif current_macd < current_signal:
+        return {
+            "action": "SELL",
+            "confidence": 0.7,
+            "reasons": [f"MACD ({current_macd:.4f}) below signal ({current_signal:.4f})"],
+            "strategy": "MACD Crossover"
+        }
+    else:
+        return {
+            "action": "HOLD",
+            "confidence": 0.0,
+            "reasons": ["MACD neutral"],
+            "strategy": "MACD Crossover"
+        }
+
+
+def bollinger_strategy(df):
+    """
+    Strategy 3: Bollinger Bands Breakout.
+    
+    BUY when price < lower band
+    SELL when price > upper band
+    HOLD otherwise
+    """
+    upper, middle, lower = calculate_bollinger_bands(df['close'])
+    price = df.iloc[-1]['close']
+    
+    if price < lower.iloc[-1]:
+        return {
+            "action": "BUY",
+            "confidence": 0.7,
+            "reasons": [f"Price ({price:.5f}) below lower band ({lower.iloc[-1]:.5f})"],
+            "strategy": "Bollinger Bands Breakout"
+        }
+    elif price > upper.iloc[-1]:
+        return {
+            "action": "SELL",
+            "confidence": 0.7,
+            "reasons": [f"Price ({price:.5f}) above upper band ({upper.iloc[-1]:.5f})"],
+            "strategy": "Bollinger Bands Breakout"
+        }
+    else:
+        return {
+            "action": "HOLD",
+            "confidence": 0.0,
+            "reasons": ["Price within Bollinger Bands"],
+            "strategy": "Bollinger Bands Breakout"
+        }
+
+
+def sma_crossover_strategy(df):
+    """
+    Strategy 4: SMA Crossover (Golden Cross).
+    
+    BUY when SMA(50) > SMA(200)
+    SELL when SMA(50) < SMA(200)
+    HOLD otherwise
+    """
+    sma_50 = calculate_sma(df['close'], window=50)
+    sma_200 = calculate_sma(df['close'], window=200)
+    
+    if len(sma_50.dropna()) == 0 or len(sma_200.dropna()) == 0:
+        return {
+            "action": "HOLD",
+            "confidence": 0.0,
+            "reasons": ["Not enough data for SMA crossover"],
+            "strategy": "SMA Crossover (Golden Cross)"
+        }
+    
+    current_50 = sma_50.iloc[-1]
+    current_200 = sma_200.iloc[-1]
+    
+    if current_50 > current_200:
+        return {
+            "action": "BUY",
+            "confidence": 0.85,
+            "reasons": [f"SMA(50) {current_50:.5f} above SMA(200) {current_200:.5f} (bullish)"],
+            "strategy": "SMA Crossover (Golden Cross)"
+        }
+    elif current_50 < current_200:
+        return {
+            "action": "SELL",
+            "confidence": 0.85,
+            "reasons": [f"SMA(50) {current_50:.5f} below SMA(200) {current_200:.5f} (bearish)"],
+            "strategy": "SMA Crossover (Golden Cross)"
+        }
+    else:
+        return {
+            "action": "HOLD",
+            "confidence": 0.0,
+            "reasons": ["SMA crossover neutral"],
+            "strategy": "SMA Crossover (Golden Cross)"
+        }
+
+
+# ============================================
+# STRATEGY DISPATCHER
+# ============================================
+
+STRATEGY_MAP = {
+    1: rsi_strategy,
+    2: macd_strategy,
+    3: bollinger_strategy,
+    4: sma_crossover_strategy,
+}
+
+
+def run_strategy(strategy_id, df):
+    """
+    Run a specific strategy by ID.
+    
+    Args:
+        strategy_id: 1-4 (from strategies table)
+        df: DataFrame with OHLCV data
+    
+    Returns:
+        dict with action, confidence, reasons, strategy name
+    """
+    strategy_func = STRATEGY_MAP.get(strategy_id)
+    
+    if strategy_func is None:
+        # Unknown strategy — fall back to voting
+        print(f"⚠️  Unknown strategy_id {strategy_id}, using default voting")
+        return generate_combined_signal(df)
+    
+    return strategy_func(df)
     
     # Generate combined signal
     signal = generate_combined_signal(df)

@@ -260,7 +260,7 @@ class BotScheduler:
             return
         
         # Step 1.2: Get current signal
-        signal = analyze_symbol(bot.symbol, bot.timeframe, 100)
+        signal = analyze_symbol(bot.symbol, bot.timeframe, 100, strategy_id=bot.strategy_id)
         
         if not signal or 'error' in signal:
             return
