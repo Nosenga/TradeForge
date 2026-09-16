@@ -459,7 +459,7 @@ async def get_strategies():
         },
         {
             "id": 4,
-            "name": "SMA Crossover (Golden Cross)",
+            "name": "SMA Crossover (20/50)",
             "description": "Buy when 50-day SMA crosses above 200-day SMA, sell when it crosses below.",
             "timeframe": "1d",
             "win_rate": 65.2,

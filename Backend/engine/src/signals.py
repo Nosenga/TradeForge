@@ -229,156 +229,215 @@ if __name__ == "__main__":
     print("\n📊 Latest Price:", df.iloc[-1]['close'])
 
 # ============================================
-# STRATEGY FUNCTIONS (Single-Indicator)
+# STRATEGY FUNCTIONS (Crossing-Event Only)
 # ============================================
 
 def rsi_strategy(df):
     """
     Strategy 1: RSI Oversold/Overbought.
     
-    BUY when RSI < 30 (oversold)
-    SELL when RSI > 70 (overbought)
-    HOLD otherwise
+    Fires only on CROSSING events:
+    - BUY  when RSI crosses BELOW 30 (was above, now below)
+    - SELL when RSI crosses ABOVE 70 (was below, now above)
+    - HOLD otherwise
     """
     rsi = calculate_rsi(df['close'])
-    latest_rsi = rsi.iloc[-1]
     
-    if latest_rsi < 30:
-        return {
-            "action": "BUY",
-            "confidence": 0.8,
-            "reasons": [f"RSI oversold ({latest_rsi:.1f})"],
-            "strategy": "RSI Oversold/Overbought"
-        }
-    elif latest_rsi > 70:
-        return {
-            "action": "SELL",
-            "confidence": 0.8,
-            "reasons": [f"RSI overbought ({latest_rsi:.1f})"],
-            "strategy": "RSI Oversold/Overbought"
-        }
-    else:
+    if len(rsi.dropna()) < 2:
         return {
             "action": "HOLD",
             "confidence": 0.0,
-            "reasons": [f"RSI neutral ({latest_rsi:.1f})"],
+            "reasons": ["Not enough RSI data for crossing detection"],
             "strategy": "RSI Oversold/Overbought"
         }
+    
+    current_rsi = rsi.iloc[-1]
+    previous_rsi = rsi.iloc[-2]
+    
+    # Crossing BELOW 30 → BUY
+    if previous_rsi >= 30 and current_rsi < 30:
+        return {
+            "action": "BUY",
+            "confidence": 0.85,
+            "reasons": [f"RSI crossed below 30 ({previous_rsi:.1f} → {current_rsi:.1f})"],
+            "strategy": "RSI Oversold/Overbought"
+        }
+    
+    # Crossing ABOVE 70 → SELL
+    if previous_rsi <= 70 and current_rsi > 70:
+        return {
+            "action": "SELL",
+            "confidence": 0.85,
+            "reasons": [f"RSI crossed above 70 ({previous_rsi:.1f} → {current_rsi:.1f})"],
+            "strategy": "RSI Oversold/Overbought"
+        }
+    
+    # No crossing
+    return {
+        "action": "HOLD",
+        "confidence": 0.0,
+        "reasons": [f"RSI {current_rsi:.1f} — no crossing (prev: {previous_rsi:.1f})"],
+        "strategy": "RSI Oversold/Overbought"
+    }
 
 
 def macd_strategy(df):
     """
     Strategy 2: MACD Crossover.
     
-    BUY when MACD crosses above signal line
-    SELL when MACD crosses below signal line
-    HOLD otherwise
+    Fires only on CROSSING events:
+    - BUY  when MACD crosses ABOVE signal line
+    - SELL when MACD crosses BELOW signal line
+    - HOLD otherwise
     """
     macd, signal, hist = calculate_macd(df['close'])
     
-    current_macd = macd.iloc[-1]
-    current_signal = signal.iloc[-1]
-    
-    if current_macd > current_signal:
-        return {
-            "action": "BUY",
-            "confidence": 0.7,
-            "reasons": [f"MACD ({current_macd:.4f}) above signal ({current_signal:.4f})"],
-            "strategy": "MACD Crossover"
-        }
-    elif current_macd < current_signal:
-        return {
-            "action": "SELL",
-            "confidence": 0.7,
-            "reasons": [f"MACD ({current_macd:.4f}) below signal ({current_signal:.4f})"],
-            "strategy": "MACD Crossover"
-        }
-    else:
+    if len(macd.dropna()) < 2 or len(signal.dropna()) < 2:
         return {
             "action": "HOLD",
             "confidence": 0.0,
-            "reasons": ["MACD neutral"],
+            "reasons": ["Not enough MACD data for crossing detection"],
             "strategy": "MACD Crossover"
         }
+    
+    curr_macd = macd.iloc[-1]
+    curr_signal = signal.iloc[-1]
+    prev_macd = macd.iloc[-2]
+    prev_signal = signal.iloc[-2]
+    
+    # MACD crossed ABOVE signal → BUY
+    if prev_macd <= prev_signal and curr_macd > curr_signal:
+        return {
+            "action": "BUY",
+            "confidence": 0.75,
+            "reasons": [f"MACD crossed above signal ({prev_macd:.4f}/{prev_signal:.4f} → {curr_macd:.4f}/{curr_signal:.4f})"],
+            "strategy": "MACD Crossover"
+        }
+    
+    # MACD crossed BELOW signal → SELL
+    if prev_macd >= prev_signal and curr_macd < curr_signal:
+        return {
+            "action": "SELL",
+            "confidence": 0.75,
+            "reasons": [f"MACD crossed below signal ({prev_macd:.4f}/{prev_signal:.4f} → {curr_macd:.4f}/{curr_signal:.4f})"],
+            "strategy": "MACD Crossover"
+        }
+    
+    # No crossing
+    return {
+        "action": "HOLD",
+        "confidence": 0.0,
+        "reasons": [f"MACD {curr_macd:.4f} vs signal {curr_signal:.4f} — no crossing"],
+        "strategy": "MACD Crossover"
+    }
 
 
 def bollinger_strategy(df):
     """
     Strategy 3: Bollinger Bands Breakout.
     
-    BUY when price < lower band
-    SELL when price > upper band
-    HOLD otherwise
+    Fires only on CROSSING events:
+    - BUY  when price crosses BELOW lower band (from inside)
+    - SELL when price crosses ABOVE upper band (from inside)
+    - HOLD otherwise
     """
     upper, middle, lower = calculate_bollinger_bands(df['close'])
-    price = df.iloc[-1]['close']
     
-    if price < lower.iloc[-1]:
-        return {
-            "action": "BUY",
-            "confidence": 0.7,
-            "reasons": [f"Price ({price:.5f}) below lower band ({lower.iloc[-1]:.5f})"],
-            "strategy": "Bollinger Bands Breakout"
-        }
-    elif price > upper.iloc[-1]:
-        return {
-            "action": "SELL",
-            "confidence": 0.7,
-            "reasons": [f"Price ({price:.5f}) above upper band ({upper.iloc[-1]:.5f})"],
-            "strategy": "Bollinger Bands Breakout"
-        }
-    else:
+    if len(df) < 2 or len(upper.dropna()) < 2 or len(lower.dropna()) < 2:
         return {
             "action": "HOLD",
             "confidence": 0.0,
-            "reasons": ["Price within Bollinger Bands"],
+            "reasons": ["Not enough data for BB crossing detection"],
             "strategy": "Bollinger Bands Breakout"
         }
+    
+    curr_price = df.iloc[-1]['close']
+    prev_price = df.iloc[-2]['close']
+    curr_upper = upper.iloc[-1]
+    prev_upper = upper.iloc[-2]
+    curr_lower = lower.iloc[-1]
+    prev_lower = lower.iloc[-2]
+    
+    # Price crossed BELOW lower band → BUY
+    if prev_price >= prev_lower and curr_price < curr_lower:
+        return {
+            "action": "BUY",
+            "confidence": 0.7,
+            "reasons": [f"Price crossed below lower band ({prev_price:.5f}/{prev_lower:.5f} → {curr_price:.5f}/{curr_lower:.5f})"],
+            "strategy": "Bollinger Bands Breakout"
+        }
+    
+    # Price crossed ABOVE upper band → SELL
+    if prev_price <= prev_upper and curr_price > curr_upper:
+        return {
+            "action": "SELL",
+            "confidence": 0.7,
+            "reasons": [f"Price crossed above upper band ({prev_price:.5f}/{prev_upper:.5f} → {curr_price:.5f}/{curr_upper:.5f})"],
+            "strategy": "Bollinger Bands Breakout"
+        }
+    
+    # No crossing
+    return {
+        "action": "HOLD",
+        "confidence": 0.0,
+        "reasons": [f"Price {curr_price:.5f} within bands [{curr_lower:.5f}, {curr_upper:.5f}]"],
+        "strategy": "Bollinger Bands Breakout"
+    }
 
 
 def sma_crossover_strategy(df):
     """
-    Strategy 4: SMA Crossover (Golden Cross).
+    Strategy 4: SMA Crossover.
     
-    BUY when SMA(50) > SMA(200)
-    SELL when SMA(50) < SMA(200)
-    HOLD otherwise
+    Uses SMA(20) vs SMA(50) since Twelve Data free tier caps at 100 candles.
+    
+    Fires only on CROSSING events:
+    - BUY  when SMA(20) crosses ABOVE SMA(50) — short-term bullish
+    - SELL when SMA(20) crosses BELOW SMA(50) — short-term bearish
+    - HOLD otherwise
     """
+    sma_20 = calculate_sma(df['close'], window=20)
     sma_50 = calculate_sma(df['close'], window=50)
-    sma_200 = calculate_sma(df['close'], window=200)
     
-    if len(sma_50.dropna()) == 0 or len(sma_200.dropna()) == 0:
+    if len(sma_20.dropna()) < 2 or len(sma_50.dropna()) < 2:
         return {
             "action": "HOLD",
             "confidence": 0.0,
-            "reasons": ["Not enough data for SMA crossover"],
-            "strategy": "SMA Crossover (Golden Cross)"
+            "reasons": ["Not enough data for SMA crossover detection"],
+            "strategy": "SMA Crossover (20/50)"
         }
     
-    current_50 = sma_50.iloc[-1]
-    current_200 = sma_200.iloc[-1]
+    curr_20 = sma_20.iloc[-1]
+    curr_50 = sma_50.iloc[-1]
+    prev_20 = sma_20.iloc[-2]
+    prev_50 = sma_50.iloc[-2]
     
-    if current_50 > current_200:
+    # SMA(20) crossed ABOVE SMA(50) → BUY
+    if prev_20 <= prev_50 and curr_20 > curr_50:
         return {
             "action": "BUY",
-            "confidence": 0.85,
-            "reasons": [f"SMA(50) {current_50:.5f} above SMA(200) {current_200:.5f} (bullish)"],
-            "strategy": "SMA Crossover (Golden Cross)"
+            "confidence": 0.8,
+            "reasons": [f"SMA(20) {curr_20:.5f} crossed above SMA(50) {curr_50:.5f}"],
+            "strategy": "SMA Crossover (20/50)"
         }
-    elif current_50 < current_200:
+    
+    # SMA(20) crossed BELOW SMA(50) → SELL
+    if prev_20 >= prev_50 and curr_20 < curr_50:
         return {
             "action": "SELL",
-            "confidence": 0.85,
-            "reasons": [f"SMA(50) {current_50:.5f} below SMA(200) {current_200:.5f} (bearish)"],
-            "strategy": "SMA Crossover (Golden Cross)"
+            "confidence": 0.8,
+            "reasons": [f"SMA(20) {curr_20:.5f} crossed below SMA(50) {curr_50:.5f}"],
+            "strategy": "SMA Crossover (20/50)"
         }
-    else:
-        return {
-            "action": "HOLD",
-            "confidence": 0.0,
-            "reasons": ["SMA crossover neutral"],
-            "strategy": "SMA Crossover (Golden Cross)"
-        }
+    
+    # No crossing
+    direction = "above" if curr_20 > curr_50 else "below"
+    return {
+        "action": "HOLD",
+        "confidence": 0.0,
+        "reasons": [f"SMA(20) {curr_20:.5f} still {direction} SMA(50) {curr_50:.5f} — no crossing"],
+        "strategy": "SMA Crossover (20/50)"
+    }
 
 
 # ============================================
