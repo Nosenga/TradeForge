@@ -4,6 +4,7 @@ Runs trading bots automatically based on signals.
 """
 
 import asyncio
+import json
 from datetime import datetime
 from typing import Dict, Optional
 from database import db_connection
@@ -11,6 +12,8 @@ from orders import OrderManager
 from strategies import analyze_symbol
 from paper_account import PaperAccountManager
 from market_hours import MarketHours
+
+
 
 #======================================================
 class TradingBot:
@@ -36,6 +39,9 @@ class TradingBot:
         self.last_signal_action = None
         self.trades_today = 0
         self.pnl_today = 0.0
+        self.daily_loss = 0.0
+        self.max_daily_loss = 300.0  # $300 = 3% of $10k
+        self.daily_reset_date = datetime.utcnow().date()
         
         self.last_check = None
         self.status = "STOPPED"
@@ -246,6 +252,13 @@ class BotScheduler:
             except Exception as e:
                 print(f"❌ Error processing bot {bot.bot_id}: {e}")
                 bot.error = str(e)
+    def _reset_daily_loss_if_needed(self, bot: TradingBot):
+        """Reset daily loss counter at UTC midnight."""
+        today = datetime.utcnow().date()
+        if bot.daily_reset_date != today:
+            print(f"🌅 Bot {bot.bot_id}: New day — resetting daily loss counter")
+            bot.daily_loss = 0.0
+            bot.daily_reset_date = today
     
     async def _process_bot(self, bot: TradingBot):
         """Process a single bot - check signal and manage positions."""
@@ -258,9 +271,37 @@ class BotScheduler:
         if not MarketHours.is_symbol_tradable(bot.symbol):
             print(f"⚠️  Bot {bot.bot_id}: Market for {bot.symbol} is currently closed.")
             return
+
+        # ✅ Check kill-switch before any new activity
+        self._reset_daily_loss_if_needed(bot)
+
+        if bot.daily_loss <= -bot.max_daily_loss:
+            print(f"🛑 Bot {bot.bot_id}: Daily loss limit hit (${bot.daily_loss:.2f}). Stopping.")
+            bot.is_running = False
+            bot.status = "STOPPED"
+            self._update_bot_status(bot.bot_id, "STOPPED")
+            self.log_bot_event(
+                bot.bot_id, bot.user_id, "KILL_SWITCH",
+                f"Daily loss limit reached: ${bot.daily_loss:.2f}",
+                details={'daily_loss': bot.daily_loss, 'max_daily_loss': bot.max_daily_loss}
+            )
+            return
         
         # Step 1.2: Get current signal
         signal = analyze_symbol(bot.symbol, bot.timeframe, 100, strategy_id=bot.strategy_id)
+
+        if signal and 'error' is not signal:
+            self.log_bot_event(
+                bot.bot_id, bot.user_id, "SIGNAL",
+                f"{signal.get('action')} @ {signal.get('price')} ({signal.get('confidence', 0)*100:.0f}%)",
+                symbol=bot.symbol,
+                details={
+                    'action': signal.get('action'),
+                    'price': signal.get('price'),
+                    'confidence': signal.get('confidence'),
+                    'reason': signal.get('reasons', [])
+                }
+            )
         
         if not signal or 'error' in signal:
             return
@@ -444,6 +485,26 @@ class BotScheduler:
                     )
                     print(f"💰 Bot {bot.bot_id}: Closed {position['symbol']} — {close_reason}")
 
+                    with db_connection() as conn:
+                        cur = conn.cursor()
+                        try:
+                            cur.execute("""
+                                SELECT pnl FROM positions WHERE position_id = %s
+                            """, (position['position_id'],))
+                            row = cur.fetchone()
+                            if row and row[0] is not None:
+                                pnl = float(row[0])
+                                bot.daily_loss += pnl
+                                print(f"📊 Bot {bot.bot_id}: P&L {pnl:+.2f} | Daily: {bot.daily_loss:+.2f}")
+                                self.log_bot_event(
+                                    bot.bot_id, bot.user_id, "INFO",
+                                    f"Trade closed: P&L {pnl:+.2f}, daily total {bot.daily_loss:+.2f}",
+                                    symbol=position['symbol'],
+                                    details={'trade_pnl': pnl, 'daily_loss': bot.daily_loss}
+                                )
+                        finally:
+                            cur.close()
+
             except Exception as e:
                 print(f"❌ Error managing position {position['position_id']}: {e}")
 
@@ -467,6 +528,25 @@ class BotScheduler:
             PaperAccountManager.update_equity(bot.user_id, open_pnl, used_margin)
         except Exception as e:
             print(f"❌ Error updating paper account for bot {bot.bot_id}: {e}")
+
+    def log_bot_event(bot_id, user_id, log_type, message, symbol=None, details=None):
+        """Write a bot event to the bot_logs table."""
+        try:
+            with db_connection() as conn:
+                cur = conn.cursor()
+                try:
+                    cur.execute("""
+                    INSERT INTO bot_logs (bot_id, user_id, log_type, symbol, message, details)
+                    VALUES (%s, %s, %s, %s, %s, %s)
+                    """, (bot_id, user_id, log_type, symbol, message,
+                      json.dumps(details) if details else None))
+                    conn.commit()
+                finally:
+                    cur.close()
+        except Exception as e:
+            print(f"❌ Failed to log bot event: {e}")
+
+    
 
 
 # Global scheduler instance

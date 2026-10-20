@@ -4,8 +4,8 @@ BASE_URL = "http://localhost:8000"
 
 # Login
 r = requests.post(f"{BASE_URL}/api/v1/auth/login", json={
-    "username": "trader2",
-    "password": "secure123"
+    "username": "Godz",
+    "password": "free2004"
 })
 token = r.json()["access_token"]
 headers = {"Authorization": f"Bearer {token}"}
